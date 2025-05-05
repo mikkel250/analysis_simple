@@ -9,6 +9,7 @@ A command-line tool for cryptocurrency market analysis using CoinGecko API, focu
 - Human-readable market insights
 - Efficient caching to minimize API calls
 - Forecasting capabilities to extrapolate from cached data
+- Educational content explaining technical indicators and their interpretation
 
 ## Installation
 
@@ -42,6 +43,9 @@ python src/main.py indicator list
 
 # Get full market analysis (uses cached data when possible)
 python src/main.py analysis run
+
+# Include educational content about technical indicators
+python src/main.py analysis run --explain
 
 # Include forecasting in analysis
 python src/main.py analysis run --forecast
@@ -86,6 +90,7 @@ The tool has the following main commands:
 
 3. **Analysis Commands**
    - `python src/main.py analysis run` - Generate comprehensive market analysis with multiple indicators
+   - `python src/main.py analysis run --explain` - Include educational content explaining each indicator
    - `python src/main.py analysis run --forecast` - Include price forecasting in analysis
 
 4. **Status Commands**
@@ -106,3 +111,20 @@ Each command has various options that can be viewed by adding `--help` after the
 - `--timeframe`, `-t`: Specify timeframe (e.g., 1d, 4h, 1h)
 - `--days`, `-d`: Number of days of historical data to fetch
 - `--refresh`, `-r`: Force refresh data from API
+- `--explain`, `-e`: Include educational content about technical indicators
+
+## Educational Content
+
+The tool includes comprehensive educational content about technical indicators and market analysis. Enable this feature using the `--explain` or `-e` flag with any analysis command:
+
+```bash
+python src/main.py analysis run --explain
+```
+
+This will display:
+- What each indicator measures and how it's calculated
+- How to interpret different values (bullish/bearish thresholds)
+- Cryptocurrency-specific considerations for each indicator
+- Explanations of trend direction, strength, and signals
+
+The educational content is designed to help users understand technical analysis concepts and make more informed trading decisions.

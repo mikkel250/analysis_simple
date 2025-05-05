@@ -22,6 +22,12 @@ from src.cli.display import (
 )
 from src.services.data_fetcher import get_historical_data, get_current_price
 from src.services.indicators import get_indicator
+from src.cli.education import (
+    get_category_explanation, 
+    get_indicator_explanation, 
+    get_summary_explanation, 
+    category_header
+)
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -399,12 +405,13 @@ def generate_summary(analysis_results: Dict[str, Any], current_price: float) -> 
     return summary
 
 
-def format_analysis_result(analysis_results: Dict[str, Any]) -> str:
+def format_analysis_result(analysis_results: Dict[str, Any], explain: bool = False) -> str:
     """
     Format analysis results for display.
     
     Args:
         analysis_results: Analysis results
+        explain: Whether to include educational explanations
         
     Returns:
         str: Formatted results for display
@@ -441,6 +448,16 @@ def format_analysis_result(analysis_results: Dict[str, Any]) -> str:
         elif name == "adx":
             formatted_data.append([f"ADX ({data.get('params', {}).get('length', 14)})", f"{data.get('value', 0):.2f}"])
     
+    # Add educational content for trend indicators if requested
+    if explain:
+        formatted_data.append(["", ""])
+        formatted_data.append([category_header("Understanding Trend Indicators"), ""])
+        formatted_data.append([get_category_explanation("trend"), ""])
+        
+        for name in trend_indicators.keys():
+            if name in ["sma", "ema", "macd", "adx"]:
+                formatted_data.append([get_indicator_explanation(name), ""])
+    
     # Add separator for momentum indicators
     formatted_data.append(["", ""])
     formatted_data.append(["Momentum Indicators", "Value"])
@@ -457,6 +474,16 @@ def format_analysis_result(analysis_results: Dict[str, Any]) -> str:
             formatted_data.append([f"Stochastic %D", f"{d_line:.2f}"])
         elif name == "cci":
             formatted_data.append([f"CCI ({data.get('params', {}).get('length', 20)})", f"{data.get('value', 0):.2f}"])
+    
+    # Add educational content for momentum indicators if requested
+    if explain:
+        formatted_data.append(["", ""])
+        formatted_data.append([category_header("Understanding Momentum Indicators"), ""])
+        formatted_data.append([get_category_explanation("momentum"), ""])
+        
+        for name in momentum_indicators.keys():
+            if name in ["rsi", "stoch", "cci"]:
+                formatted_data.append([get_indicator_explanation(name), ""])
     
     # Add separator for volatility indicators
     formatted_data.append(["", ""])
@@ -475,6 +502,16 @@ def format_analysis_result(analysis_results: Dict[str, Any]) -> str:
         elif name == "atr":
             formatted_data.append([f"ATR ({data.get('params', {}).get('length', 14)})", f"{data.get('value', 0):.2f}"])
     
+    # Add educational content for volatility indicators if requested
+    if explain:
+        formatted_data.append(["", ""])
+        formatted_data.append([category_header("Understanding Volatility Indicators"), ""])
+        formatted_data.append([get_category_explanation("volatility"), ""])
+        
+        for name in volatility_indicators.keys():
+            if name in ["bbands", "atr"]:
+                formatted_data.append([get_indicator_explanation(name), ""])
+    
     # Add separator for volume indicators
     formatted_data.append(["", ""])
     formatted_data.append(["Volume Indicators", "Value"])
@@ -485,6 +522,16 @@ def format_analysis_result(analysis_results: Dict[str, Any]) -> str:
         if name == "obv":
             formatted_data.append([f"OBV", f"{data.get('value', 0):.2f}"])
     
+    # Add educational content for volume indicators if requested
+    if explain:
+        formatted_data.append(["", ""])
+        formatted_data.append([category_header("Understanding Volume Indicators"), ""])
+        formatted_data.append([get_category_explanation("volume"), ""])
+        
+        for name in volume_indicators.keys():
+            if name == "obv":
+                formatted_data.append([get_indicator_explanation(name), ""])
+    
     # Add separator for summary
     formatted_data.append(["", ""])
     formatted_data.append(["Market Summary", ""])
@@ -494,12 +541,29 @@ def format_analysis_result(analysis_results: Dict[str, Any]) -> str:
     trend = summary.get("trend", {})
     signals = summary.get("signals", {})
     
-    formatted_data.append([f"Trend Direction", trend.get("direction", "neutral").upper()])
-    formatted_data.append([f"Trend Strength", trend.get("strength", "neutral").upper()])
-    formatted_data.append([f"Short-term Signal", signals.get("short_term", "neutral").upper()])
-    formatted_data.append([f"Medium-term Signal", signals.get("medium_term", "neutral").upper()])
-    formatted_data.append([f"Long-term Signal", signals.get("long_term", "neutral").upper()])
-    formatted_data.append([f"Suggested Action", signals.get("action", "hold").upper()])
+    trend_direction = trend.get("direction", "neutral").upper()
+    trend_strength = trend.get("strength", "neutral").upper()
+    short_term = signals.get("short_term", "neutral").upper()
+    medium_term = signals.get("medium_term", "neutral").upper()
+    long_term = signals.get("long_term", "neutral").upper()
+    action = signals.get("action", "hold").upper()
+    
+    formatted_data.append([f"Trend Direction", trend_direction])
+    formatted_data.append([f"Trend Strength", trend_strength])
+    formatted_data.append([f"Short-term Signal", short_term])
+    formatted_data.append([f"Medium-term Signal", medium_term])
+    formatted_data.append([f"Long-term Signal", long_term])
+    formatted_data.append([f"Suggested Action", action])
+    
+    # Add educational content for market summary if requested
+    if explain:
+        formatted_data.append(["", ""])
+        formatted_data.append([category_header("Understanding Market Summary"), ""])
+        formatted_data.append([get_category_explanation("market_summary"), ""])
+        formatted_data.append([f"Trend Direction: {get_summary_explanation('trend_direction', trend_direction)}", ""])
+        formatted_data.append([f"Trend Strength: {get_summary_explanation('trend_strength', trend_strength)}", ""])
+        formatted_data.append([f"Signal Timeframes: {get_summary_explanation('signal_terms', 'short_term')}", ""])
+        formatted_data.append([f"Suggested Action: {get_summary_explanation('actions', action)}", ""])
     
     # Add separator for analysis text
     formatted_data.append(["", ""])
@@ -521,9 +585,13 @@ def run(
     days: int = typer.Option(100, "--days", "-d", help="Number of days of historical data to fetch"),
     force_refresh: bool = typer.Option(False, "--refresh", "-r", help="Force refresh data from API"),
     forecast: bool = typer.Option(False, "--forecast", "-f", help="Include forecasting based on historical data"),
+    explain: bool = typer.Option(False, "--explain", "-e", help="Include educational explanations for technical indicators"),
 ):
     """
     Generate comprehensive market analysis with multiple indicators.
+    
+    With the --explain flag, includes educational content about what each indicator means
+    and how to interpret the values.
     """
     try:
         # Get current price
@@ -593,7 +661,7 @@ def run(
                     display_warning(f"Could not generate forecast: {str(e)}")
         
         # Format and display the analysis
-        formatted_output = format_analysis_result(analysis_results)
+        formatted_output = format_analysis_result(analysis_results, explain)
         print(formatted_output)
         
         display_success("Market analysis completed successfully")

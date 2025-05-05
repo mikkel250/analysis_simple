@@ -347,18 +347,35 @@ class DataFetcher:
                 use_cache=use_cache
             )
             
-            # Resample to the desired frequency
-            if df.index.freq != freq:
-                df = df['price'].resample(freq).ohlc()
-                # Since we resampled, we need to get volume data again
-                volume_data = self.fetch_historical_price_volume(
-                    coin_id=coin_id,
-                    vs_currency=vs_currency,
-                    days=days,
-                    use_cache=use_cache
-                )
-                volume_resampled = volume_data['volume'].resample(freq).sum()
-                df = pd.concat([df, volume_resampled], axis=1)
+            # Check if df already has OHLC columns
+            # fetch_historical_price_volume() can return two different structures:
+            # 1. For most cases, it returns a DataFrame with OHLC columns already computed
+            # 2. In some edge cases, it might return a DataFrame with only 'price' column
+            # This check handles both cases to avoid KeyError when 'price' column doesn't exist
+            required_columns = ['open', 'high', 'low', 'close']
+            if all(col in df.columns for col in required_columns):
+                # DataFrame already has OHLC format, use as is
+                pass
+            else:
+                # Resample to the desired frequency
+                if df.index.freq != freq:
+                    # THIS WOULD FAIL if 'price' column doesn't exist (for shorter timeframes)
+                    # The problem that previously occurred was that fetch_historical_price_volume
+                    # actually performs resampling internally for shorter timeframes (5m, 15m, etc.)
+                    # and already returns a DataFrame with OHLC columns, not a 'price' column.
+                    # Meanwhile, for daily timeframes, we use fetch_historical_ohlc which has
+                    # a different data processing flow.
+                    # This inconsistency in data structures between timeframes caused the KeyError.
+                    df = df['price'].resample(freq).ohlc()
+                    # Since we resampled, we need to get volume data again
+                    volume_data = self.fetch_historical_price_volume(
+                        coin_id=coin_id,
+                        vs_currency=vs_currency,
+                        days=days,
+                        use_cache=use_cache
+                    )
+                    volume_resampled = volume_data['volume'].resample(freq).sum()
+                    df = pd.concat([df, volume_resampled], axis=1)
         
         # For daily and longer timeframes, use OHLC endpoint
         else:

@@ -1,0 +1,58 @@
+# Environment variables
+.env
+
+# Logs
+logs/
+*.log
+
+# Cache directory
+data/cache/
+indicator_*.json
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Coverage directory
+coverage/
+htmlcov/
+
+# IDE specific files
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.cursor/
+
+# Python specific files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python virtual environments
+venv/
+.venv/
+env/
+ENV/
+
+# Python distribution / packaging
+dist/
+build/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Python testing and coverage
+.pytest_cache/
+.coverage
+.coverage.*
+.tox/
+
+# Python type checking
+.mypy_cache/
+.dmypy.json
+
+# Jupyter Notebook
+.ipynb_checkpoints/
+
+# Project specific files that don't need to be tracked 

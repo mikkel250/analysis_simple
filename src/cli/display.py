@@ -12,8 +12,21 @@ import datetime
 from tqdm import tqdm
 import contextlib
 
-# Initialize colorama
-colorama.init()
+# Initialize colorama with improved parameters
+colorama.init(strip=False, convert=True, wrap=True)
+
+def supports_color() -> bool:
+    """Check if the current terminal supports color."""
+    import os, sys
+    # Check for NO_COLOR environment variable
+    if os.getenv('NO_COLOR') is not None:
+        return False
+    # Check for Windows terminal
+    is_windows = sys.platform == 'win32'
+    # Check for common CI environments
+    is_ci = os.getenv('CI', '') or os.getenv('TEAMCITY_VERSION', '')
+    # Check for TTY
+    return sys.stdout.isatty() and not is_ci and not (is_windows and 'ANSICON' not in os.environ)
 
 def display_info(message: str) -> None:
     """
@@ -60,18 +73,23 @@ def display_table(data: List[List[Any]]) -> None:
     """
     print(tabulate(data, headers="firstrow", tablefmt="grid"))
 
-def format_price(price: Union[float, str], trend: str = 'neutral') -> str:
+def format_price(price: Union[float, str], trend: str = 'neutral', use_color: bool = True) -> str:
     """
     Format price data with color based on trend
     
     Args:
         price: The price value
         trend: Trend direction ('up', 'down', or 'neutral')
+        use_color: Whether to use color formatting (default: True)
         
     Returns:
         Formatted price string with color
     """
     formatted_price = f"{float(price):.2f}" if isinstance(price, (int, float)) else price
+    
+    # Skip color formatting if colors aren't supported or explicitly disabled
+    if not use_color or not supports_color():
+        return formatted_price
     
     if trend == 'up':
         return f"{Fore.GREEN}{formatted_price}{Style.RESET_ALL}"

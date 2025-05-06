@@ -1,0 +1,158 @@
+{
+  "symbol": "BTC",
+  "timeframe": "short",
+  "current_price": 95112.75,
+  "period_return": 0.0,
+  "volatility": 2.158114921887566,
+  "trend": {
+    "direction": "Sideways",
+    "strength": "Weak",
+    "confidence": "High",
+    "signals": {
+      "short_term": "Neutral",
+      "medium_term": "Neutral",
+      "long_term": "Neutral",
+      "action": "Hold"
+    },
+    "explanation": "Trend direction determined by linear  regression slope (nan) and percent change (nan%). Trend  strength based on ADX value of nan. Signals derived from 4  technical indicators. "
+  },
+  "trend_direction": "Sideways",
+  "indicators": {
+    "rsi": "Neutral",
+    "macd": "Neutral",
+    "bollinger": "Neutral",
+    "sma": "Unavailable",
+    "adx": "Weak Trend",
+    "stochastic": "Neutral",
+    "cci": "Neutral",
+    "atr": "Unavailable",
+    "obv": "Neutral",
+    "ichimoku": "Unavailable"
+  },
+  "indicator_data": {
+    "rsi": {
+      "interpretation": "Neutral",
+      "value": null
+    },
+    "macd": {
+      "interpretation": "Neutral",
+      "values": {
+        "line": null,
+        "signal": null,
+        "histogram": null
+      }
+    },
+    "bollinger": {
+      "interpretation": "Neutral",
+      "values": {
+        "upper": null,
+        "middle": null,
+        "lower": null,
+        "close": null,
+        "percent": null
+      }
+    },
+    "sma": {
+      "interpretation": "Unavailable",
+      "values": {
+        "sma": null,
+        "close": null,
+        "position": "Unknown"
+      }
+    },
+    "adx": {
+      "interpretation": "Weak Trend",
+      "value": null
+    },
+    "stochastic": {
+      "interpretation": "Neutral",
+      "values": {
+        "k": null,
+        "d": null
+      }
+    },
+    "cci": {
+      "interpretation": "Neutral",
+      "value": null
+    },
+    "atr": {
+      "interpretation": "Unavailable",
+      "value": null
+    },
+    "obv": {
+      "interpretation": "Neutral",
+      "value": null
+    },
+    "ichimoku": {
+      "interpretation": "Unavailable",
+      "values": {
+        "tenkan_sen": null,
+        "kijun_sen": null,
+        "senkou_span_a": null,
+        "senkou_span_b": null,
+        "chikou_span": null,
+        "cloud_bullish": null,
+        "position": "Unavailable",
+        "tk_cross": "Unavailable"
+      }
+    },
+    "interpretations": {
+      "rsi": "Neutral",
+      "macd": "Neutral",
+      "bollinger": "Neutral",
+      "sma": "Unavailable",
+      "adx": "Weak Trend",
+      "stochastic": "Neutral",
+      "cci": "Neutral",
+      "atr": "Unavailable",
+      "obv": "Neutral",
+      "ichimoku": "Unavailable"
+    }
+  },
+  "market_cases": {
+    "overall_sentiment": "Neutral",
+    "cases": {
+      "bullish": {
+        "confidence": "0.0%",
+        "confidence_raw": 0.0,
+        "supporting_indicators": []
+      },
+      "bearish": {
+        "confidence": "0.0%",
+        "confidence_raw": 0.0,
+        "supporting_indicators": []
+      },
+      "neutral": {
+        "confidence": "100.0%",
+        "confidence_raw": 1.0,
+        "supporting_indicators": [
+          [
+            "rsi",
+            "Neutral"
+          ],
+          [
+            "macd",
+            "Neutral"
+          ],
+          [
+            "bollinger",
+            "Neutral"
+          ],
+          [
+            "stochastic",
+            "Neutral"
+          ],
+          [
+            "cci",
+            "Neutral"
+          ],
+          [
+            "obv",
+            "Neutral"
+          ]
+        ]
+      }
+    },
+    "explanation": "The neutral case has the highest  confidence at 100.0% with 6 supporting indicators."
+  }
+}

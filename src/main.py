@@ -24,7 +24,9 @@ from src.cli.commands import (
     price_app,
     analysis_app,
     status_app,
-    clean_app
+    clean_app,
+    jupyter_app,
+    analyzer_app
 )
 
 # Create the main app instance
@@ -36,6 +38,8 @@ app.add_typer(price_app, name="price")
 app.add_typer(analysis_app, name="analysis")
 app.add_typer(status_app, name="status")
 app.add_typer(clean_app, name="clean")
+app.add_typer(jupyter_app, name="jupyter")
+app.add_typer(analyzer_app, name="analyzer")
 
 # Display information about the local calculation feature
 @app.callback()

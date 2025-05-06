@@ -5,7 +5,7 @@ Handles the 'analysis' command for generating comprehensive market analysis.
 """
 
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List, Tuple
 from datetime import datetime
 
 import typer
@@ -40,19 +40,32 @@ def generate_analysis(
     df: pd.DataFrame,
     current_price_data: Dict[str, Any],
     symbol: str = 'BTC',
-    timeframe: str = '1d'
+    timeframe: str = '1d',
+    vs_currency: str = 'usd'
 ) -> Dict[str, Any]:
     """
     Generate comprehensive market analysis using multiple indicators.
     
+    This function performs calculations on the provided historical data and current price
+    to generate a structured analysis result that can be used for both CLI display
+    and interactive visualization in Jupyter notebooks.
+    
     Args:
-        df: Historical price DataFrame
-        current_price_data: Current price data
-        symbol: Symbol being analyzed
-        timeframe: Timeframe of the data
+        df: Historical price DataFrame with columns for OHLCV data
+        current_price_data: Current price data dictionary from the API
+        symbol: Symbol being analyzed (e.g., "BTC")
+        timeframe: Timeframe of the data (e.g., "1d", "4h")
+        vs_currency: Currency to calculate prices against (default: "usd")
         
     Returns:
-        Dict: Analysis results
+        Dict[str, Any]: Structured analysis results with the following keys:
+            - price_data: Current price information
+            - trend_indicators: Trend indicator calculations
+            - momentum_indicators: Momentum indicator calculations
+            - volatility_indicators: Volatility indicator calculations
+            - volume_indicators: Volume indicator calculations
+            - summary: Market summary and signals
+            - timestamp: Analysis generation timestamp
     """
     analysis_results = {
         "price_data": {},
@@ -61,12 +74,17 @@ def generate_analysis(
         "volatility_indicators": {},
         "volume_indicators": {},
         "summary": {},
-        "timestamp": datetime.now().isoformat()
+        "timestamp": datetime.now().isoformat(),
+        "metadata": {
+            "symbol": symbol,
+            "timeframe": timeframe,
+            "vs_currency": vs_currency
+        }
     }
     
     # Extract price data
     try:
-        current_price = current_price_data.get("current_price", {}).get("usd", 0)
+        current_price = current_price_data.get("current_price", {}).get(vs_currency, 0)
         price_change_24h = current_price_data.get("price_change_24h", 0)
         price_change_pct_24h = current_price_data.get("price_change_percentage_24h", 0)
         
@@ -405,22 +423,27 @@ def generate_summary(analysis_results: Dict[str, Any], current_price: float) -> 
     return summary
 
 
-def format_analysis_result(analysis_results: Dict[str, Any], explain: bool = False) -> str:
+def prepare_analysis_data(analysis_results: Dict[str, Any], explain: bool = False) -> List[List[Any]]:
     """
-    Format analysis results for display.
+    Prepare analysis results data for display.
     
     Args:
-        analysis_results: Analysis results
+        analysis_results: Analysis results dictionary
         explain: Whether to include educational explanations
         
     Returns:
-        str: Formatted results for display
+        List[List[Any]]: Data ready for formatting
     """
     formatted_data = []
     
+    # Get metadata
+    metadata = analysis_results.get("metadata", {})
+    symbol = metadata.get("symbol", "BTC")
+    vs_currency = metadata.get("vs_currency", "usd").upper()
+    
     # Add price information
     price_data = analysis_results.get("price_data", {})
-    formatted_data.append(["BTC/USDT Price", format_price(price_data.get("current_price", 0))])
+    formatted_data.append([f"{symbol}/{vs_currency} Price", format_price(price_data.get("current_price", 0))])
     formatted_data.append([
         "24h Change", 
         format_price(price_data.get("price_change_24h", 0)) + 
@@ -569,7 +592,32 @@ def format_analysis_result(analysis_results: Dict[str, Any], explain: bool = Fal
     formatted_data.append(["", ""])
     formatted_data.append(["Analysis", trend.get("analysis", "")])
     
-    return tabulate(formatted_data, tablefmt="fancy_grid")
+    return formatted_data
+
+
+def format_analysis_result(analysis_results: Dict[str, Any], explain: bool = False) -> str:
+    """
+    Format analysis results as a string.
+    
+    Args:
+        analysis_results: Analysis results dictionary
+        explain: Whether to include educational explanations
+        
+    Returns:
+        Formatted string
+    """
+    # Get summary section
+    summary = analysis_results.get("summary", {})
+    
+    # Format the results as a table
+    formatted_results = tabulate(
+        prepare_analysis_data(analysis_results, explain),
+        headers=["Section", "Data"],
+        tablefmt="fancy_grid"
+    )
+    
+    # Return the formatted results
+    return formatted_results
 
 
 @analysis_app.callback()
@@ -583,6 +631,7 @@ def run(
     symbol: str = typer.Option("BTC", "--symbol", "-s", help="Symbol to analyze"),
     timeframe: str = typer.Option("1d", "--timeframe", "-t", help="Timeframe for data (e.g., 1d, 4h, 1h)"),
     days: int = typer.Option(100, "--days", "-d", help="Number of days of historical data to fetch"),
+    vs_currency: str = typer.Option("usd", "--vs_currency", "-c", help="Currency to calculate prices against"),
     force_refresh: bool = typer.Option(False, "--refresh", "-r", help="Force refresh data from API"),
     forecast: bool = typer.Option(False, "--forecast", "-f", help="Include forecasting based on historical data"),
     explain: bool = typer.Option(False, "--explain", "-e", help="Include educational explanations for technical indicators"),
@@ -590,82 +639,26 @@ def run(
     """
     Generate comprehensive market analysis with multiple indicators.
     
+    This command now uses the same underlying analysis engine as the 'analyzer analyze' command.
     With the --explain flag, includes educational content about what each indicator means
-    and how to interpret the values.
+    and how to interpret the values, now displayed directly with each indicator.
     """
-    try:
-        # Get current price
-        with display_spinner("Fetching current price..."):
-            current_price_data = get_current_price(symbol, force_refresh)
-        
-        if not current_price_data:
-            display_error(f"Failed to get current price for {symbol}")
-            return
-        
-        # Get historical data
-        with display_spinner(f"Fetching {timeframe} historical data..."):
-            df = get_historical_data(symbol, timeframe, days, force_refresh)
-        
-        if df is None or df.empty:
-            display_error(f"Failed to get historical data for {symbol}")
-            return
-        
-        display_data_age(df.index[-1])
-        
-        # Generate analysis
-        with display_spinner("Generating comprehensive analysis..."):
-            analysis_results = generate_analysis(df, current_price_data, symbol, timeframe)
-        
-        # Generate forecast if requested
-        if forecast:
-            with display_spinner("Generating price forecast..."):
-                try:
-                    # Simple forecasting using exponential smoothing
-                    from statsmodels.tsa.holtwinters import ExponentialSmoothing
-                    
-                    # Prepare data for forecasting
-                    close_prices = df['close'].values
-                    
-                    # Configure and fit the model
-                    model = ExponentialSmoothing(
-                        close_prices, 
-                        trend='add',  # Add trend component
-                        seasonal=None,  # No seasonal component for simplicity
-                        seasonal_periods=None
-                    ).fit()
-                    
-                    # Generate forecast for the next 7 periods
-                    forecast_periods = 7
-                    forecast_values = model.forecast(forecast_periods)
-                    
-                    # Create a formatted table with forecasted values
-                    forecast_data = [["Forecast Period", "Predicted Price", "Change"]]
-                    
-                    current_price = close_prices[-1]
-                    for i, value in enumerate(forecast_values):
-                        period = i + 1
-                        change = ((value - current_price) / current_price) * 100
-                        change_direction = "+" if change >= 0 else ""
-                        forecast_data.append([
-                            f"{period} {timeframe}" + ("s" if period > 1 else ""),
-                            format_price(value),
-                            f"{change_direction}{change:.2f}%"
-                        ])
-                    
-                    print("\n" + tabulate(forecast_data, headers="firstrow", tablefmt="fancy_grid"))
-                    display_warning("Forecast is based on historical patterns and should not be used as financial advice.")
-                    
-                except ImportError:
-                    display_warning("Forecasting requires statsmodels package. Install with: pip install statsmodels")
-                except Exception as e:
-                    display_warning(f"Could not generate forecast: {str(e)}")
-        
-        # Format and display the analysis
-        formatted_output = format_analysis_result(analysis_results, explain)
-        print(formatted_output)
-        
-        display_success("Market analysis completed successfully")
-        
-    except Exception as e:
-        display_error(f"Error generating analysis: {str(e)}")
-        logger.exception("Error in analysis command") 
+    # Import analyzer components
+    from src.cli.commands.analyzer import TimeframeOption, OutputFormat, analyze
+    
+    # Map timeframe to TimeframeOption
+    timeframe_mapping = {
+        "1d": TimeframeOption.SHORT, 
+        "1w": TimeframeOption.MEDIUM,
+        "1M": TimeframeOption.LONG
+    }
+    selected_timeframe = timeframe_mapping.get(timeframe, TimeframeOption.SHORT)
+    
+    # Call the analyzer analyze command
+    return analyze(
+        symbol=symbol,
+        timeframe=selected_timeframe,
+        output=OutputFormat.TEXT,
+        save_charts=False,
+        explain=explain
+    ) 

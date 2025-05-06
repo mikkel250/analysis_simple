@@ -17,9 +17,16 @@ coingecko-python>=1.3.0
 
 # Data Fetching
 pycoingecko>=3.1.0
+yfinance>=0.2.35
 
 # Forecasting
 statsmodels>=0.14.0
 
 # Caching and Storage
-python-dotenv>=0.20.0 
+python-dotenv>=0.20.0
+
+# Jupyter & Visualization dependencies
+ipykernel>=6.28.0
+matplotlib>=3.8.0
+plotly>=5.19.0
+jupyterlab>=4.1.0

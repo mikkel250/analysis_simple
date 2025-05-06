@@ -22,6 +22,7 @@ from src.cli.display import (
     display_spinner
 )
 from src.services.data_fetcher import get_current_price, get_historical_data
+from src.services.price_validator import validate_crypto_price
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -46,12 +47,19 @@ def format_price_result(
     """
     formatted_data = []
     
-    # Current price data
-    current_price = price_data.get("current_price", {}).get("usd", 0)
+    # Current price data with validation
+    raw_price = price_data.get("current_price", {}).get("usd", 0)
+    # Apply validation before formatting
+    current_price = validate_crypto_price("BTC", raw_price)
+    
+    # Log if we had to adjust the price
+    if raw_price != current_price:
+        logger.warning(f"Original price ${raw_price} adjusted to ${current_price} after validation")
+    
     market_cap = price_data.get("market_cap", {}).get("usd", 0)
     total_volume = price_data.get("total_volume", {}).get("usd", 0)
-    high_24h = price_data.get("high_24h", {}).get("usd", 0)
-    low_24h = price_data.get("low_24h", {}).get("usd", 0)
+    high_24h = validate_crypto_price("BTC", price_data.get("high_24h", {}).get("usd", 0))
+    low_24h = validate_crypto_price("BTC", price_data.get("low_24h", {}).get("usd", 0))
     price_change_24h = price_data.get("price_change_24h", 0)
     price_change_percentage_24h = price_data.get("price_change_percentage_24h", 0)
     
@@ -74,18 +82,23 @@ def format_price_result(
         prev_row = df.iloc[-2] if len(df) > 1 else None
         
         # 24h price change calculated from DataFrame
-        close_price = last_row['close']
-        prev_close = prev_row['close'] if prev_row is not None else None
+        close_price = validate_crypto_price("BTC", last_row['close'])
+        prev_close = validate_crypto_price("BTC", prev_row['close'] if prev_row is not None else None)
         
         if prev_close is not None:
             change = close_price - prev_close
-            change_pct = (change / prev_close) * 100
+            # Avoid division by zero
+            change_pct = (change / prev_close) * 100 if prev_close != 0 else 0
             formatted_data.append(["Last Close", format_price(close_price)])
             formatted_data.append(["Previous Close", format_price(prev_close)])
             formatted_data.append(["Change", format_price(change) + f" ({change_pct:.2f}%)"])
         
         # Volatility (based on high/low range)
-        volatility = (last_row['high'] - last_row['low']) / last_row['low'] * 100
+        # Validate high and low values before calculation
+        high_val = validate_crypto_price("BTC", last_row['high'])
+        low_val = validate_crypto_price("BTC", last_row['low'])
+        # Avoid division by zero
+        volatility = (high_val - low_val) / low_val * 100 if low_val != 0 else 0
         formatted_data.append(["Daily Volatility", f"{volatility:.2f}%"])
         
         # Daily trading volume
@@ -96,11 +109,15 @@ def format_price_result(
         sma_50 = df['close'].rolling(window=50).mean().iloc[-1] if len(df) >= 50 else None
         sma_200 = df['close'].rolling(window=200).mean().iloc[-1] if len(df) >= 200 else None
         
+        # Validate SMA values before display
         if sma_20 is not None:
+            sma_20 = validate_crypto_price("BTC", sma_20)
             formatted_data.append(["SMA (20)", format_price(sma_20)])
         if sma_50 is not None:
+            sma_50 = validate_crypto_price("BTC", sma_50)
             formatted_data.append(["SMA (50)", format_price(sma_50)])
         if sma_200 is not None:
+            sma_200 = validate_crypto_price("BTC", sma_200)
             formatted_data.append(["SMA (200)", format_price(sma_200)])
         
         # Add price analysis

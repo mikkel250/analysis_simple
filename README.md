@@ -10,6 +10,7 @@ A command-line tool for cryptocurrency market analysis using CoinGecko API, focu
 - Efficient caching to minimize API calls
 - Forecasting capabilities to extrapolate from cached data
 - Educational content explaining technical indicators and their interpretation
+- Detailed numerical values display alongside indicator interpretations
 
 ## Installation
 
@@ -81,16 +82,16 @@ DEFAULT_TIMEFRAME=1d
 The tool has the following main commands:
 
 1. **Indicator Commands**
-   - `python src/main.py indicator calculate <name>` - Calculate and display a specific technical indicator
+   - `python src/main.py indicator calculate <n>` - Calculate and display a specific technical indicator
    - `python src/main.py indicator list` - List all available technical indicators
-   - `python src/main.py indicator clear-cache <name>` - Clear the cache for a specific indicator
+   - `python src/main.py indicator clear-cache <n>` - Clear the cache for a specific indicator
 
 2. **Price Commands**
    - `python src/main.py price get` - Get current price and basic analysis for BTC-USDT
 
 3. **Analysis Commands**
    - `python src/main.py analysis run` - Generate comprehensive market analysis with multiple indicators
-   - `python src/main.py analysis run --explain` - Include educational content explaining each indicator
+   - `python src/main.py analysis run --explain` - Include educational content explaining each indicator (now displayed directly with each indicator)
    - `python src/main.py analysis run --forecast` - Include price forecasting in analysis
 
 4. **Status Commands**
@@ -103,6 +104,21 @@ The tool has the following main commands:
    - `python src/main.py clean by-type <type>` - Clean cached data of a specific type
    - `python src/main.py clean by-symbol <symbol>` - Clean cached data for a specific symbol
 
+6. **Jupyter Commands**
+   - `python src/main.py jupyter start` - Start a Jupyter notebook server with the analysis environment
+   - `python src/main.py jupyter demo` - Launch a demo notebook with cryptocurrency visualizations
+   - `python src/main.py jupyter run <notebook>` - Run a specific example notebook
+   - `python src/main.py jupyter analysis <symbol>` - Generate and launch a market analysis notebook for a specific symbol
+
+7. **Market Analyzer Commands**
+   - `python src/main.py analyzer analyze` - Generate comprehensive market analysis for BTC with short timeframe (default)
+   - `python src/main.py analyzer analyze --timeframe medium` - Generate analysis with medium timeframe
+   - `python src/main.py analyzer analyze --output json` - Output analysis in JSON format
+   - `python src/main.py analyzer analyze --output html` - Generate an HTML report with interactive charts
+   - `python src/main.py analyzer analyze --save-charts` - Save visualization charts to files
+
+*Note: Both 'analysis run' and 'analyzer analyze' commands now use the same underlying analysis engine for consistent results. The educational content (with --explain flag) now appears directly under each indicator for improved readability.*
+
 Each command has various options that can be viewed by adding `--help` after the command.
 
 ## Common Options
@@ -113,12 +129,45 @@ Each command has various options that can be viewed by adding `--help` after the
 - `--refresh`, `-r`: Force refresh data from API
 - `--explain`, `-e`: Include educational content about technical indicators
 
+## Enhanced Indicator Display
+
+The tool now provides detailed numerical values alongside indicator interpretations, offering more transparency into the analysis results:
+
+- **RSI**: Shows the actual RSI value (0-100) together with its interpretation (Overbought/Oversold/Neutral)
+- **MACD**: Displays MACD line, Signal line, and Histogram values alongside the interpretation
+- **Bollinger Bands**: Shows Upper, Middle, and Lower bands, current price, and position (% from middle band)
+
+Example output:
+```
+TECHNICAL INDICATORS:
+
+Trend:
+  - MACD: Bullish
+    ├─ Line: 123.4567
+    ├─ Signal: 100.2345
+    └─ Histogram: 23.2222
+
+Momentum:
+  - RSI: Neutral (Value: 55.23)
+
+Volatility:
+  - BOLLINGER: Neutral
+    ├─ Upper Band: 25456.78
+    ├─ Middle Band: 24789.45
+    ├─ Lower Band: 24122.12
+    ├─ Price: 24800.00
+    └─ Position: 0.43% from middle
+```
+
+This enhancement provides both a quick interpretation at a glance and the actual numerical data for traders who want to see the precise values behind the analysis.
+
 ## Educational Content
 
 The tool includes comprehensive educational content about technical indicators and market analysis. Enable this feature using the `--explain` or `-e` flag with any analysis command:
 
 ```bash
 python src/main.py analysis run --explain
+python src/main.py analyzer analyze --explain
 ```
 
 This will display:
@@ -127,4 +176,68 @@ This will display:
 - Cryptocurrency-specific considerations for each indicator
 - Explanations of trend direction, strength, and signals
 
+The educational content now appears directly under each indicator for improved context and readability. This integrated approach ensures that explanations are provided exactly where they're most relevant, making it easier to understand the significance of each indicator's current value.
+
 The educational content is designed to help users understand technical analysis concepts and make more informed trading decisions.
+
+## Jupyter Integration
+
+The tool integrates with Jupyter notebooks to provide interactive analysis capabilities:
+
+```bash
+# Start a Jupyter notebook server with the analysis environment
+python src/main.py jupyter start
+
+# Launch a demo notebook with cryptocurrency visualizations
+python src/main.py jupyter demo
+
+# Run a specific example notebook
+python src/main.py jupyter run price_analysis
+
+# Generate and launch a market analysis notebook for BTC with short timeframe (default)
+python src/main.py jupyter analysis BTC
+
+# Generate and launch a notebook with medium timeframe
+python src/main.py jupyter analysis BTC --timeframe medium
+
+# Generate a notebook without launching it
+python src/main.py jupyter analysis ETH --timeframe long --no-launch
+
+# Generate a notebook to a custom location
+python src/main.py jupyter analysis BTC --output custom_notebook.ipynb
+```
+
+The Jupyter integration provides:
+- Interactive data visualizations
+- Custom analysis notebooks for different trading timeframes
+- Educational content with code examples
+- Ability to modify and extend the analysis for specific use cases
+- Exportable reports and charts
+
+## Market Analyzer
+
+The tool includes a comprehensive market analyzer that can provide detailed analysis in various formats:
+
+```bash
+# Generate market analysis for BTC with short timeframe (default)
+python src/main.py analyzer analyze
+
+# Generate analysis with medium timeframe
+python src/main.py analyzer analyze --timeframe medium
+
+# Output analysis in JSON format
+python src/main.py analyzer analyze --output json
+
+# Generate an HTML report with interactive charts
+python src/main.py analyzer analyze --output html
+
+# Save visualization charts to files
+python src/main.py analyzer analyze --save-charts
+```
+
+The market analyzer provides:
+- Comprehensive technical analysis with multiple indicators
+- Price trend analysis and volatility metrics
+- Interactive visualizations (price history, technical, candlestick)
+- Indicator interpretations and trading signals
+- Exportable reports in various formats (text, JSON, HTML)

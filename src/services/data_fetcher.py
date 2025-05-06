@@ -6,6 +6,7 @@ and converting it to pandas DataFrame format suitable for technical analysis.
 """
 
 import time
+import json
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Tuple, Union, Any
 
@@ -424,7 +425,8 @@ def get_historical_data(
     symbol: str = 'BTC',
     timeframe: str = '1d',
     limit: int = 100,
-    use_cache: bool = True
+    use_cache: bool = True,
+    vs_currency: str = 'usd'
 ) -> pd.DataFrame:
     """
     Get historical OHLCV data for a cryptocurrency.
@@ -434,6 +436,7 @@ def get_historical_data(
         timeframe: Time interval ('1h', '4h', '1d', etc.) (default: '1d')
         limit: Number of candles to fetch (default: 100)
         use_cache: Whether to use cached data if available (default: True)
+        vs_currency: Currency to calculate prices against (default: 'usd')
         
     Returns:
         pandas.DataFrame: OHLCV data with columns [open, high, low, close, volume]
@@ -458,6 +461,7 @@ def get_historical_data(
     df = fetcher.fetch_data_by_timeframe(
         timeframe=timeframe,
         coin_id=coin_id,
+        vs_currency=vs_currency,
         limit=limit,
         use_cache=use_cache
     )
@@ -504,7 +508,8 @@ def invalidate_price_cache(
 
 def get_current_price(
     symbol: str = 'BTC',
-    force_refresh: bool = False
+    force_refresh: bool = False,
+    vs_currency: str = 'usd'
 ) -> Dict[str, Any]:
     """
     Get current price data for a specific cryptocurrency.
@@ -512,6 +517,7 @@ def get_current_price(
     Args:
         symbol: Cryptocurrency symbol (default: 'BTC')
         force_refresh: Whether to force refresh data from API instead of using cache
+        vs_currency: Currency to calculate prices against (default: 'usd')
         
     Returns:
         Dict: Current price and related data
@@ -536,7 +542,7 @@ def get_current_price(
     coin_id = symbol_map.get(symbol.upper(), 'bitcoin')
     
     # Generate cache key
-    cache_key = f"price_{coin_id}_current"
+    cache_key = f"price_{coin_id}_{vs_currency}_current"
     
     # Check cache first if not forcing refresh
     if not force_refresh:
@@ -547,11 +553,14 @@ def get_current_price(
             if cached_time:
                 cache_time = datetime.fromisoformat(cached_time)
                 if datetime.now() - cache_time < timedelta(minutes=5):
+                    logger.debug(f"Using cached price data for {symbol} (age: {(datetime.now() - cache_time).total_seconds() / 60:.1f} minutes)")
                     return cached_data.get('data', {})
     
     try:
         # Initialize DataFetcher and fetch data
         fetcher = DataFetcher()
+        
+        logger.debug(f"Fetching price data for {symbol} ({coin_id}) from CoinGecko API")
         
         # Fetch price data from CoinGecko
         price_data = fetcher._handle_api_call(
@@ -565,14 +574,40 @@ def get_current_price(
             sparkline=False
         )
         
-        # Extract only the market data
+        # Add detailed debug logging for troubleshooting
         if price_data and 'market_data' in price_data:
+            market_data = price_data['market_data']
+            
+            # Log specific relevant price fields
+            debug_data = {
+                'current_price': market_data.get('current_price', {}),
+                'market_cap': market_data.get('market_cap', {}),
+                'last_updated': market_data.get('last_updated', ''),
+                'price_change_24h': market_data.get('price_change_24h', 0)
+            }
+            logger.debug(f"Raw price data for {symbol} from CoinGecko API: {json.dumps(debug_data, indent=2)}")
+            
+            # Log specific currency values and flag suspicious prices
+            if 'current_price' in market_data:
+                prices = market_data['current_price']
+                for currency, value in prices.items():
+                    if currency == 'usd':
+                        logger.debug(f"{symbol} price in {currency}: {value}")
+                        
+                    # Flag suspiciously high prices
+                    if currency == 'usd' and value > 90000:
+                        logger.warning(f"Suspiciously high {currency} price for {symbol}: {value}")
+                    elif currency == 'usd' and value < 1000 and symbol.upper() == 'BTC':
+                        logger.warning(f"Suspiciously low {currency} price for {symbol}: {value}")
+            
+            # Extract only the market data
             market_data = price_data['market_data']
             
             # Store in cache
             metadata = {
                 'coin_id': coin_id,
                 'symbol': symbol,
+                'vs_currency': vs_currency,
                 'source': 'coingecko',
                 'endpoint': 'coin_by_id',
                 'timestamp': datetime.now().isoformat()
@@ -581,13 +616,18 @@ def get_current_price(
             
             return market_data
         else:
+            logger.error(f"No market data available in API response for {symbol}")
             raise Exception(f"No market data available for {symbol}")
         
     except Exception as e:
+        # Log the error details
+        logger.error(f"Error fetching current price for {symbol}: {str(e)}")
+        
         # If error occurs and we have cached data, return that even if it's old
         cached_data = get_cached_json_data(cache_key)
         if cached_data is not None:
-            print(f"Warning: Error fetching current price, using cached data: {str(e)}")
+            logger.warning(f"Falling back to cached data for {symbol} due to API error: {str(e)}")
             return cached_data.get('data', {})
         else:
+            logger.error(f"No cached data available for {symbol} after API error")
             raise Exception(f"Error fetching current price and no cached data available: {str(e)}") 

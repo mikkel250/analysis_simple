@@ -1480,14 +1480,16 @@ class MarketAnalyzer:
                 - 'volatility_forecast': dict of forecasts for 24h, 4h, 1h
                 - 'regime': output of detect_regime
                 - 'strategy_suggestion': output of suggest_strategy_for_regime
+                - 'watch_for_signals': list of 'what to watch for' signals (optional)
         """
         from src.services.indicators import forecast_volatility
-        from src.services.trading_strategies import detect_regime, suggest_strategy_for_regime
+        from src.services.trading_strategies import detect_regime, suggest_strategy_for_regime, generate_watch_for_signals
         if self.data is None or self.data.empty:
             return {
                 'volatility_forecast': {},
                 'regime': {'trend_regime': 'ambiguous', 'volatility_regime': 'ambiguous', 'confidence': 'low', 'metrics': {}},
-                'strategy_suggestion': {'strategy': 'insufficient_data', 'educational_rationale': 'Not enough data to determine a safe or effective strategy.', 'actionable_advice': 'Do not open new positions.'}
+                'strategy_suggestion': {'strategy': 'insufficient_data', 'educational_rationale': 'Not enough data to determine a safe or effective strategy.', 'actionable_advice': 'Do not open new positions.'},
+                'watch_for_signals': ["Watch for more price action and indicator signals to develop before trading."]
             }
         # Volatility forecasts
         volatility_forecast = {
@@ -1498,8 +1500,13 @@ class MarketAnalyzer:
         regime = detect_regime(self.data)
         # Strategy suggestion
         strategy_suggestion = suggest_strategy_for_regime(regime)
+        # Watch for signals (only if strategy is 'insufficient_data' or 'reduce_exposure')
+        watch_for_signals = []
+        if strategy_suggestion.get('strategy') in ['insufficient_data', 'reduce_exposure']:
+            watch_for_signals = generate_watch_for_signals(regime, regime.get('metrics', {}))
         return {
             'volatility_forecast': volatility_forecast,
             'regime': regime,
-            'strategy_suggestion': strategy_suggestion
+            'strategy_suggestion': strategy_suggestion,
+            'watch_for_signals': watch_for_signals
         } 

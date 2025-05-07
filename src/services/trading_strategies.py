@@ -937,4 +937,42 @@ def suggest_strategy_for_regime(regime):
         'strategy': 'insufficient_data',
         'educational_rationale': 'Not enough data to determine a safe or effective strategy. Wait for more price action and indicator signals before trading.',
         'actionable_advice': 'Do not open new positions. Monitor the market and wait for clearer signals.'
-    } 
+    }
+
+def generate_watch_for_signals(regime, metrics):
+    """
+    Generate 'what to watch for' signals based on regime and indicator values.
+    Args:
+        regime (dict or None): Regime output from detect_regime, or None.
+        metrics (dict): Indicator values (e.g., BBands width, ADX, RSI).
+    Returns:
+        list of str: Signals for what to watch for to trigger actionable strategies.
+    """
+    signals = []
+    # If regime is None or strategy is 'insufficient_data', return generic signal
+    if regime is None or not isinstance(regime, dict):
+        return ["Watch for more price action and indicator signals to develop before trading."]
+    trend = regime.get('trend_regime', 'ambiguous')
+    vol = regime.get('volatility_regime', 'ambiguous')
+    confidence = regime.get('confidence', 'low')
+    # If actionable strategy, return empty list
+    if (trend == 'trending' and vol == 'high_volatility' and confidence in ['high', 'medium']) or \
+       (trend == 'range_bound' and vol == 'low_volatility' and confidence in ['high', 'medium']):
+        return []
+    # Otherwise, generate contextually relevant signals
+    bbands_width = metrics.get('bbands_width') or metrics.get('band_width')
+    adx = metrics.get('ADX_14') or metrics.get('adx')
+    rsi = metrics.get('rsi_14') or metrics.get('RSI_14')
+    # Volatility (BBands width)
+    if bbands_width is not None and bbands_width < 4:
+        signals.append(f"Watch for volatility (Bollinger Band width) to increase above 4% (currently {bbands_width:.1f}%).")
+    # ADX (trend strength)
+    if adx is not None and adx < 25:
+        signals.append(f"Watch for ADX to rise above 25 (currently {adx:.1f}).")
+    # RSI (momentum)
+    if rsi is not None and 45 < rsi < 55:
+        signals.append(f"Watch for RSI to move decisively away from 50 (currently {rsi:.1f}).")
+    # If no specific signals, provide a generic one
+    if not signals:
+        signals.append("Watch for stronger trend, higher volatility, or clearer indicator signals before trading.")
+    return signals 

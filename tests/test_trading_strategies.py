@@ -23,7 +23,8 @@ from src.services.trading_strategies import (
     calculate_risk_metrics,
     generate_trade_recommendation,
     detect_regime,
-    suggest_strategy_for_regime
+    suggest_strategy_for_regime,
+    generate_watch_for_signals
 )
 from src.services.indicators import forecast_volatility  # To be implemented
 
@@ -626,4 +627,51 @@ def test_strategy_suggestion_insufficient_data():
     assert isinstance(result, dict)
     assert result['strategy'] == 'insufficient_data'
     assert 'educational_rationale' in result
-    assert 'actionable_advice' in result 
+    assert 'actionable_advice' in result
+
+def test_watch_for_signals_insufficient_data():
+    """Test 'what to watch for' signals when strategy is 'insufficient_data'."""
+    regime = None
+    metrics = {}
+    signals = generate_watch_for_signals(regime, metrics)
+    assert isinstance(signals, list)
+    assert any('watch' in s.lower() for s in signals) or signals == []
+
+
+def test_watch_for_signals_reduce_exposure():
+    """Test 'what to watch for' signals when strategy is 'reduce_exposure' and volatility is low."""
+    regime = {
+        'trend_regime': 'ambiguous',
+        'volatility_regime': 'low_volatility',
+        'confidence': 'low',
+        'metrics': {'bbands_width': 2.5, 'ADX_14': 12, 'rsi_14': 48}
+    }
+    signals = generate_watch_for_signals(regime, regime['metrics'])
+    assert any('volatility' in s.lower() for s in signals)
+    assert any('adx' in s.lower() for s in signals)
+
+
+def test_watch_for_signals_omit_when_actionable():
+    """Test that 'what to watch for' section is omitted when actionable strategy is present."""
+    regime = {
+        'trend_regime': 'trending',
+        'volatility_regime': 'high_volatility',
+        'confidence': 'high',
+        'metrics': {'bbands_width': 8.0, 'ADX_14': 30, 'rsi_14': 60}
+    }
+    signals = generate_watch_for_signals(regime, regime['metrics'])
+    assert signals == []
+
+
+def test_watch_for_signals_contextual_relevance():
+    """Test that signals are contextually relevant to indicator values."""
+    regime = {
+        'trend_regime': 'range_bound',
+        'volatility_regime': 'low_volatility',
+        'confidence': 'medium',
+        'metrics': {'bbands_width': 2.0, 'ADX_14': 10, 'rsi_14': 52}
+    }
+    signals = generate_watch_for_signals(regime, regime['metrics'])
+    assert any('volatility' in s.lower() for s in signals)
+    assert any('adx' in s.lower() for s in signals)
+    assert all(isinstance(s, str) for s in signals) 

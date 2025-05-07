@@ -1030,6 +1030,12 @@ def print_market_analysis(summary, symbol, timeframe, explain: bool = False, ana
             print(f"    • Strategy: {s.replace('_', ' ').capitalize()}")
             print(f"    • Rationale: {rationale}")
             print(f"    • Advice: {advice}")
+        # WHAT TO WATCH FOR section
+        watch_for_signals = adv.get("watch_for_signals", [])
+        if watch_for_signals:
+            print("\nWHAT TO WATCH FOR:")
+            for signal in watch_for_signals:
+                print(f"  - {signal}")
     # --- END ADVANCED ANALYTICS ---
 
     # Price information

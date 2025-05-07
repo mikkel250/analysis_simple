@@ -9,16 +9,16 @@ from colorama import Fore, Style
 
 # Helper functions for formatted text
 def category_header(text):
-    """Format a category header with color."""
-    return f"{Fore.CYAN}{Style.BRIGHT}📊 {text}{Style.RESET_ALL}"
+    """Format a category header - plain text version."""
+    return f"📊 {text}"
 
 def indicator_name(text):
-    """Format an indicator name with color."""
-    return f"{Fore.GREEN}{Style.BRIGHT}{text}{Style.RESET_ALL}"
+    """Format an indicator name - plain text version."""
+    return f"{text}"
 
 def highlight(text):
-    """Highlight important text."""
-    return f"{Fore.YELLOW}{text}{Style.RESET_ALL}"
+    """Highlight important text - plain text version."""
+    return f"{text}"
 
 # Category explanations
 CATEGORY_EXPLANATIONS = {
@@ -188,4 +188,60 @@ def get_indicator_explanation(indicator):
 
 def get_summary_explanation(summary_type, value):
     """Get the explanation for a market summary item."""
-    return SUMMARY_EXPLANATIONS.get(summary_type, {}).get(value.lower(), "") 
+    return SUMMARY_EXPLANATIONS.get(summary_type, {}).get(value.lower(), "")
+
+def get_period_return_explanation(period_return: float) -> str:
+    """
+    Get educational explanation for period return value.
+    
+    Args:
+        period_return: Percentage return over the analyzed period
+        
+    Returns:
+        Educational text explaining period return calculation and interpretation
+    """
+    # Base explanation of calculation method
+    explanation = "Period return measures price change as a percentage over the analyzed timeframe, calculated as ((current_price - starting_price) / starting_price) * 100."
+    
+    # Range-specific interpretation
+    if period_return > 10:
+        range_text = "This value indicates a strong bullish movement, potentially suggesting overextension and profit-taking opportunities."
+    elif period_return > 5:
+        range_text = "This value indicates a substantial positive movement, showing significant buying pressure."
+    elif period_return > 2:
+        range_text = "This value indicates moderate positive movement, above typical daily fluctuations."
+    elif period_return >= -2:
+        range_text = "This value indicates sideways price action, typical of consolidation or indecision phases."
+    elif period_return >= -5:
+        range_text = "This value indicates moderate negative movement, suggesting selling pressure."
+    elif period_return >= -10:
+        range_text = "This value indicates substantial negative movement, showing significant selling pressure."
+    else:
+        range_text = "This value indicates a strong bearish movement, potentially suggesting oversold conditions and potential reversal opportunities."
+    
+    return f"{explanation} {range_text}"
+
+def get_volatility_explanation(volatility: float) -> str:
+    """
+    Get educational explanation for volatility value.
+    
+    Args:
+        volatility: Volatility percentage value
+        
+    Returns:
+        Educational text explaining volatility calculation and interpretation
+    """
+    # Base explanation of calculation method
+    explanation = "Volatility measures price fluctuation magnitude. It's calculated as the percentage range between high and low prices relative to the low price."
+    
+    # Range-specific interpretation
+    if volatility > 8:
+        range_text = "This value falls into the 'extremely high daily volatility' range (>8%), indicating potential market uncertainty."
+    elif volatility > 5:
+        range_text = "This value falls into the 'high daily volatility' range (5-8%), suggesting active market conditions."
+    elif volatility > 2:
+        range_text = "This value falls into the 'moderate daily volatility' range (2-5%), which is typical of normal market conditions."
+    else:
+        range_text = "This value falls into the 'low daily volatility' range (<2%), suggesting a consolidation phase."
+    
+    return f"{explanation} {range_text}" 

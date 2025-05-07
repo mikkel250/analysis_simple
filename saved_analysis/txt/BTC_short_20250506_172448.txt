@@ -1,0 +1,88 @@
+DEBUG: timeframe value from analyzer: 'short', type: <class 'str'>
+DEBUG: About to call print_market_analysis with timeframe='short'
+
+======================================================================
+MARKET ANALYSIS: BTC (SHORT - 15m)
+======================================================================
+
+PRICE INFORMATION:
+Current Price: 97217.31
+24H change: 0.36%
+Volatility: 2.68%
+
+TREND: SIDEWAYS
+Strength: Strong
+Confidence: Low
+
+SIGNALS:
+  Short-term: Bearish
+  Medium-term: Bullish
+  Long-term: Neutral
+  Recommended Action: BUY
+
+ADVANCED TRADING RECOMMENDATION:
+  Market Condition: Trending (Uptrend)
+  Strategy: Trend following
+  Action: BUY
+  Confidence: Medium
+
+  Entry Points:
+    • Pullback to support @ 94914.87
+    • Immediate entry @ 97217.31
+
+  Exit Points:
+    • Stop Loss @ 94914.87
+    • Target 1 @ 97817.97
+    • Target 2 @ 99552.84
+
+  Risk Assessment:
+    • Risk/Reward Ratio: 0.26
+    • Risk: 2.37%
+    • Suggested Position Size: 42.22%
+
+  Supporting Indicators:
+    • RSI: 83.47002237382371
+    • MACD: 491.0270 > 210.3584
+    • Stochastic: K(93.6) > D(88.5)
+
+TECHNICAL INDICATORS:
+
+Trend:
+  - MACD: Bullish
+    ├─ Line: 491.0270
+    ├─ Signal: 210.3584
+    └─ Histogram: 280.6685
+  - SMA: Neutral
+  - ADX: Strong Trend
+    └─ Value: 32.30
+  - ICHIMOKU: Bullish
+    ├─ Tenkan-sen (Conversion): 96020.30
+    ├─ Kijun-sen (Base): 95641.25
+    ├─ Senkou Span A (Leading A): 94024.75
+    ├─ Senkou Span B (Leading B): 94121.56
+    └─ Chikou Span (Lagging): 97217.31
+
+Momentum:
+  - RSI: Overbought
+    └─ Value: 83.47
+  - STOCHASTIC: Overbought
+    ├─ %K: 93.63
+    └─ %D: 88.47
+  - CCI: Overbought
+    └─ Value: 331.61
+
+Volatility:
+  - BOLLINGER: Overbought
+    ├─ Upper Band: 97082.07
+    ├─ Middle Band: 95428.45
+    ├─ Lower Band: 93774.83
+    ├─ Price: 97217.31
+    └─ Position: 1.87% from middle
+  - ATR: Low Volatility
+    └─ Value: 300.33
+
+Volume:
+  - OBV: Confirming Uptrend
+    └─ Value: -1611326464.0
+
+======================================================================

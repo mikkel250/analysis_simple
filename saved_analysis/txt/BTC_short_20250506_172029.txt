@@ -1,0 +1,89 @@
+DEBUG: timeframe value from analyzer: 'short', type: <class 'str'>
+DEBUG: About to call print_market_analysis with timeframe='short'
+
+======================================================================
+MARKET ANALYSIS: BTC (SHORT - 15m)
+======================================================================
+
+PRICE INFORMATION:
+Current Price: 97018.64
+24H change: 0.16%
+Volatility: 2.67%
+
+TREND: SIDEWAYS
+Strength: Strong
+Confidence: Low
+
+SIGNALS:
+  Short-term: Bearish
+  Medium-term: Bullish
+  Long-term: Neutral
+  Recommended Action: BUY
+
+ADVANCED TRADING RECOMMENDATION:
+  Market Condition: Trending (Uptrend)
+  Strategy: Trend following
+  Action: BUY
+  Confidence: Medium
+
+  Entry Points:
+    • Pullback to support @ 94914.87
+    • Immediate entry @ 97018.64
+
+  Exit Points:
+    • Stop Loss @ 94914.87
+    • Target 1 @ 97019.51
+    • Target 2 @ 97591.04
+    • Target 3 @ 99232.79
+
+  Risk Assessment:
+    • Risk/Reward Ratio: 0.00
+    • Risk: 2.17%
+    • Suggested Position Size: 46.12%
+
+  Supporting Indicators:
+    • RSI: 82.49295575686504
+    • MACD: 475.1785 > 197.6796
+    • Stochastic: K(93.6) > D(88.5)
+
+TECHNICAL INDICATORS:
+
+Trend:
+  - MACD: Bullish
+    ├─ Line: 475.1785
+    ├─ Signal: 197.6796
+    └─ Histogram: 277.4988
+  - SMA: Neutral
+  - ADX: Strong Trend
+    └─ Value: 32.18
+  - ICHIMOKU: Bullish
+    ├─ Tenkan-sen (Conversion): 95921.39
+    ├─ Kijun-sen (Base): 95542.35
+    ├─ Senkou Span A (Leading A): 94024.75
+    ├─ Senkou Span B (Leading B): 94121.56
+    └─ Chikou Span (Lagging): 97018.64
+
+Momentum:
+  - RSI: Overbought
+    └─ Value: 82.49
+  - STOCHASTIC: Overbought
+    ├─ %K: 93.62
+    └─ %D: 88.47
+  - CCI: Overbought
+    └─ Value: 318.70
+
+Volatility:
+  - BOLLINGER: Overbought
+    ├─ Upper Band: 96978.41
+    ├─ Middle Band: 95408.58
+    ├─ Lower Band: 93838.76
+    ├─ Price: 97018.64
+    └─ Position: 1.69% from middle
+  - ATR: Low Volatility
+    └─ Value: 286.20
+
+Volume:
+  - OBV: Confirming Uptrend
+    └─ Value: -2477317120.0
+
+======================================================================

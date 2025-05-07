@@ -1470,4 +1470,36 @@ class MarketAnalyzer:
                 f"with {num_supporters} supporting indicators."
             )
         
-        return result 
+        return result
+
+    def get_advanced_analytics(self) -> Dict[str, Any]:
+        """
+        Compute advanced analytics: volatility forecast, regime detection, and strategy suggestion.
+        Returns:
+            Dict with keys:
+                - 'volatility_forecast': dict of forecasts for 24h, 4h, 1h
+                - 'regime': output of detect_regime
+                - 'strategy_suggestion': output of suggest_strategy_for_regime
+        """
+        from src.services.indicators import forecast_volatility
+        from src.services.trading_strategies import detect_regime, suggest_strategy_for_regime
+        if self.data is None or self.data.empty:
+            return {
+                'volatility_forecast': {},
+                'regime': {'trend_regime': 'ambiguous', 'volatility_regime': 'ambiguous', 'confidence': 'low', 'metrics': {}},
+                'strategy_suggestion': {'strategy': 'insufficient_data', 'educational_rationale': 'Not enough data to determine a safe or effective strategy.', 'actionable_advice': 'Do not open new positions.'}
+            }
+        # Volatility forecasts
+        volatility_forecast = {
+            horizon: forecast_volatility(self.data, horizon=horizon)
+            for horizon in ["24h", "4h", "1h"]
+        }
+        # Regime detection
+        regime = detect_regime(self.data)
+        # Strategy suggestion
+        strategy_suggestion = suggest_strategy_for_regime(regime)
+        return {
+            'volatility_forecast': volatility_forecast,
+            'regime': regime,
+            'strategy_suggestion': strategy_suggestion
+        } 

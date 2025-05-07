@@ -42,4 +42,39 @@ __all__ = [
     'calculate_ichimoku',
     'get_indicator',
     'invalidate_indicator_cache'
-] 
+]
+
+import numpy as np
+import pandas as pd
+
+def forecast_volatility(df, horizon="24h"):
+    """
+    Forecast volatility for the given horizon using EWMA.
+    Args:
+        df (pd.DataFrame): DataFrame with 'close' prices.
+        horizon (str): One of '24h', '4h', '1h'.
+    Returns:
+        dict: {'horizon': str, 'forecast': float, 'confidence': str}
+    """
+    # Validate input
+    if df is None or 'close' not in df or len(df['close'].dropna()) < 20:
+        return {"horizon": horizon, "forecast": None, "confidence": "low"}
+    closes = df['close'].dropna().values
+    if np.allclose(closes, closes[0]):
+        return {"horizon": horizon, "forecast": 0.0, "confidence": "low"}
+    # Map horizon to EWMA span (approximate)
+    span_map = {"24h": 20, "4h": 5, "1h": 2}
+    span = span_map.get(horizon, 20)
+    # Calculate EWMA volatility (annualized, then scaled to percent)
+    returns = pd.Series(closes).pct_change().dropna()
+    ewma_vol = returns.ewm(span=span).std().iloc[-1]
+    # Convert to percent (daily volatility * sqrt(365) for annualized, but here just percent)
+    forecast = float(ewma_vol * 100)
+    # Confidence: high if enough data and volatility > 1%, medium if 0.5-1%, low otherwise
+    if len(closes) >= 50 and forecast > 1:
+        confidence = "high"
+    elif forecast > 0.5:
+        confidence = "medium"
+    else:
+        confidence = "low"
+    return {"horizon": horizon, "forecast": forecast, "confidence": confidence} 

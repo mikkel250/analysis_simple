@@ -201,7 +201,7 @@ def analyze(
             if output_format == "jsf" and output_filename:
                 with open(output_filename, 'w') as f:
                     f.write(json_output)
-                print(f"[green]✓ Analysis saved to {output_filename}[/green]")
+                print(f"[green]✓ Analysis saved to: {os.path.abspath(output_filename)}[/green]")
         
         # For TXT output format - capture terminal output
         elif output_format == "txt":
@@ -244,7 +244,7 @@ def analyze(
             # Save to file
             with open(output_filename, 'w') as f:
                 f.write(clean_text)
-            print(f"[green]✓ Analysis saved to {output_filename}[/green]")
+            print(f"[green]✓ Analysis saved to: {os.path.abspath(output_filename)}[/green]")
         
         # For HTML format, the _display_html_output function already saves to a file
         elif output_format == "html":
@@ -273,18 +273,12 @@ def _display_text_output(summary: dict, data=None, explain: bool = False, output
         explain: Whether to include educational explanations
         output_format: Output format (text/txt)
     """
-    # Extract key information
     symbol = summary.get('symbol', '')
     timeframe = summary.get('timeframe', '')
-    
-    # If data is an analyzer object, get necessary data directly
     if hasattr(data, 'symbol') and hasattr(data, 'timeframe'):
-        # Use analyzer's symbol and timeframe if available
         symbol = data.symbol
         timeframe = data.timeframe
-    
-    # Call print_market_analysis to generate output
-    print_market_analysis(summary, symbol, timeframe, explain=explain)
+    print_market_analysis(summary, symbol, timeframe, explain=explain, analyzer=data)
     
     # For TXT output, the file saving is handled in the analyze function through IO redirection
 
@@ -952,7 +946,7 @@ def display_market_analysis(analyzer: MarketAnalyzer, output_format: str = None,
             _display_html_output(summary, analyzer.get_full_analysis() if hasattr(analyzer, 'get_full_analysis') else {}, visualizations, explain=explain)
         else:
             # Default to text output
-            print_market_analysis(summary, analyzer.symbol, analyzer.timeframe, explain=explain)
+            print_market_analysis(summary, analyzer.symbol, analyzer.timeframe, explain=explain, analyzer=analyzer)
             
             # Calculate detailed support/resistance levels
             cases = analyzer.present_cases() if hasattr(analyzer, 'present_cases') else {}
@@ -981,33 +975,63 @@ def display_market_analysis(analyzer: MarketAnalyzer, output_format: str = None,
         raise AnalyzerError(f"Failed to analyze {analyzer.symbol}: {str(e)}")
 
 
-def print_market_analysis(summary, symbol, timeframe, explain: bool = False):
+def print_market_analysis(summary, symbol, timeframe, explain: bool = False, analyzer=None):
     """
-    Print market analysis in text format.
-    
+    Print market analysis in text format, including advanced analytics at the top after the header.
     Args:
         summary: Analysis summary dict
         symbol: Market symbol
         timeframe: Trading timeframe
         explain: Whether to include educational explanations
+        analyzer: MarketAnalyzer instance (optional, for advanced analytics)
     """
     # Direct hardcoded formatting based on the timeframe string
-    # Map standard timeframes to their intervals
     formatted_timeframe = timeframe.upper()
-    
-    # Force interval display for known timeframes
     if timeframe.lower() == "short":
         formatted_timeframe = "SHORT - 15m"
     elif timeframe.lower() == "medium":
         formatted_timeframe = "MEDIUM - 1h"
     elif timeframe.lower() == "long":
         formatted_timeframe = "LONG - 1d"
-    
-    # Display header
+
     print("\n" + "=" * 70)
     print(f"MARKET ANALYSIS: {symbol} ({formatted_timeframe})")
     print("=" * 70)
-    
+
+    # --- ADVANCED ANALYTICS SECTION ---
+    if analyzer is not None and hasattr(analyzer, "get_advanced_analytics"):
+        adv = analyzer.get_advanced_analytics()
+        print("\nADVANCED ANALYTICS:")
+        # Volatility Forecast
+        vf = adv.get("volatility_forecast", {})
+        if vf:
+            print("  Volatility Forecast:")
+            for horizon, res in vf.items():
+                if res and isinstance(res, dict):
+                    val = res.get("forecast", None)
+                    conf = res.get("confidence", "-")
+                    if val is not None:
+                        print(f"    • {horizon}: {val:.2f}% (Confidence: {conf})")
+        # Regime Detection
+        regime = adv.get("regime", {})
+        if regime:
+            print("  Market Regime:")
+            tr = regime.get("trend_regime", "-")
+            vr = regime.get("volatility_regime", "-")
+            conf = regime.get("confidence", "-")
+            print(f"    • Trend: {tr.replace('_', ' ').capitalize()} | Volatility: {vr.replace('_', ' ').capitalize()} (Confidence: {conf})")
+        # Strategy Suggestion
+        strat = adv.get("strategy_suggestion", {})
+        if strat:
+            print("  Strategy Suggestion:")
+            s = strat.get("strategy", "-")
+            rationale = strat.get("educational_rationale", "-")
+            advice = strat.get("actionable_advice", "-")
+            print(f"    • Strategy: {s.replace('_', ' ').capitalize()}")
+            print(f"    • Rationale: {rationale}")
+            print(f"    • Advice: {advice}")
+    # --- END ADVANCED ANALYTICS ---
+
     # Price information
     price = summary.get('current_price', float('nan'))
     period_return = summary.get('period_return', float('nan'))

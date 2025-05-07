@@ -819,4 +819,122 @@ def generate_trade_recommendation(data: pd.DataFrame) -> Dict[str, Any]:
             'supportive_indicators': [],
             'contrary_indicators': [],
             'confidence': 'low'
-        } 
+        }
+
+def detect_regime(df):
+    """
+    Detect volatility and trend regime using rolling std, ADX, and BBands width.
+    Args:
+        df (pd.DataFrame): DataFrame with price and indicator columns.
+    Returns:
+        dict: {'trend_regime': str, 'volatility_regime': str, 'confidence': str, 'metrics': dict}
+    """
+    metrics = {}
+    if df is None or len(df) < 20 or 'close' not in df:
+        return {
+            'trend_regime': 'ambiguous',
+            'volatility_regime': 'ambiguous',
+            'confidence': 'low',
+            'metrics': metrics
+        }
+    # Volatility regime: use rolling std and BBands width
+    closes = df['close'].dropna()
+    if len(closes) < 20:
+        return {
+            'trend_regime': 'ambiguous',
+            'volatility_regime': 'ambiguous',
+            'confidence': 'low',
+            'metrics': metrics
+        }
+    rolling_std = closes.rolling(window=20).std().iloc[-1]
+    price = closes.iloc[-1]
+    # BBands width
+    bb_upper = df['BBU_20_2.0'].iloc[-1] if 'BBU_20_2.0' in df else None
+    bb_lower = df['BBL_20_2.0'].iloc[-1] if 'BBL_20_2.0' in df else None
+    if bb_upper is not None and bb_lower is not None and price != 0:
+        band_width = (bb_upper - bb_lower) / price * 100
+    else:
+        band_width = None
+    # Volatility regime logic
+    if band_width is not None and band_width > 4:
+        volatility_regime = 'high_volatility'
+    elif rolling_std / price * 100 > 2:
+        volatility_regime = 'high_volatility'
+    elif band_width is not None and band_width < 2:
+        volatility_regime = 'low_volatility'
+    elif rolling_std / price * 100 < 1:
+        volatility_regime = 'low_volatility'
+    else:
+        volatility_regime = 'ambiguous'
+    metrics['rolling_std_pct'] = rolling_std / price * 100 if price != 0 else None
+    metrics['band_width'] = band_width
+    # Trend regime: use ADX
+    adx = df['ADX_14'].iloc[-1] if 'ADX_14' in df else None
+    if adx is not None:
+        metrics['adx'] = adx
+        if adx > 25:
+            trend_regime = 'trending'
+        elif adx < 15:
+            trend_regime = 'range_bound'
+        else:
+            trend_regime = 'ambiguous'
+    else:
+        trend_regime = 'ambiguous'
+    # Confidence
+    if trend_regime != 'ambiguous' and volatility_regime != 'ambiguous':
+        confidence = 'high'
+    elif trend_regime != 'ambiguous' or volatility_regime != 'ambiguous':
+        confidence = 'medium'
+    else:
+        confidence = 'low'
+    return {
+        'trend_regime': trend_regime,
+        'volatility_regime': volatility_regime,
+        'confidence': confidence,
+        'metrics': metrics
+    }
+
+def suggest_strategy_for_regime(regime):
+    """
+    Suggest a trading strategy based on detected regime for leveraged perpetual futures.
+    Args:
+        regime (dict): Output from detect_regime, or None.
+    Returns:
+        dict: {'strategy': str, 'educational_rationale': str, 'actionable_advice': str}
+    """
+    if regime is None or not isinstance(regime, dict):
+        return {
+            'strategy': 'insufficient_data',
+            'educational_rationale': 'Not enough data to determine a safe or effective strategy. Wait for more price action and indicator signals before trading.',
+            'actionable_advice': 'Do not open new positions. Monitor the market and wait for clearer signals.'
+        }
+    trend = regime.get('trend_regime', 'ambiguous')
+    vol = regime.get('volatility_regime', 'ambiguous')
+    confidence = regime.get('confidence', 'low')
+    # Trending + High Volatility
+    if trend == 'trending' and vol == 'high_volatility':
+        return {
+            'strategy': 'trend_following',
+            'educational_rationale': 'Trending markets with high volatility are ideal for trend-following strategies. Use leverage judiciously to maximize gains, but be aware of increased risk and potential for large swings.',
+            'actionable_advice': 'Consider entering in the direction of the trend on pullbacks. Use tight stop losses and moderate leverage (e.g., 2-5x). Scale in/out as volatility increases. Avoid overexposure.'
+        }
+    # Range-bound + Low Volatility
+    if trend == 'range_bound' and vol == 'low_volatility':
+        return {
+            'strategy': 'range_trading',
+            'educational_rationale': 'Range-bound, low volatility markets are best suited for mean-reversion and range-trading strategies. Leverage can be used, but with smaller position sizes due to limited price movement.',
+            'actionable_advice': 'Buy near support, sell near resistance. Use tight stops and small to moderate leverage (e.g., 1-3x). Take profits quickly. Avoid chasing breakouts.'
+        }
+    # Ambiguous regime
+    if trend == 'ambiguous' or vol == 'ambiguous' or confidence == 'low':
+        return {
+            'strategy': 'reduce_exposure',
+            'educational_rationale': 'When the market regime is unclear or confidence is low, it is prudent to reduce exposure and avoid aggressive trading. Uncertain conditions increase the risk of whipsaws and losses.',
+            'actionable_advice': 'Reduce position sizes, tighten stops, or stay on the sidelines. Avoid using high leverage. Wait for clearer signals before re-entering.'
+        }
+    # Fallback
+    return {
+        'strategy': 'insufficient_data',
+        'educational_rationale': 'Not enough data to determine a safe or effective strategy. Wait for more price action and indicator signals before trading.',
+        'actionable_advice': 'Do not open new positions. Monitor the market and wait for clearer signals.'
+    } 

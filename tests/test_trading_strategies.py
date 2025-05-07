@@ -21,8 +21,11 @@ from src.services.trading_strategies import (
     detect_support_resistance,
     calculate_price_targets,
     calculate_risk_metrics,
-    generate_trade_recommendation
+    generate_trade_recommendation,
+    detect_regime,
+    suggest_strategy_for_regime
 )
+from src.services.indicators import forecast_volatility  # To be implemented
 
 # Fixtures for testing
 
@@ -471,4 +474,156 @@ def test_stop_loss_and_position_size_no_support_resistance():
     # Position size should be capped
     price_targets['confidence'] = 'medium'
     risk_metrics = calculate_risk_metrics(df, price_targets)
-    assert 0 <= risk_metrics['position_size'] <= 10 
+    assert 0 <= risk_metrics['position_size'] <= 10
+
+@pytest.mark.parametrize("horizon", ["24h", "4h", "1h"])
+def test_volatility_forecast_valid(sample_uptrend_data, horizon):
+    """Test volatility forecast output for valid data and all horizons."""
+    result = forecast_volatility(sample_uptrend_data, horizon=horizon)
+    assert isinstance(result, dict)
+    assert result["horizon"] == horizon
+    assert isinstance(result["forecast"], float)
+    assert 0 <= result["forecast"] < 100  # Volatility as percent, reasonable range
+    assert result["confidence"] in ["high", "medium", "low"]
+
+
+def test_volatility_forecast_insufficient_data():
+    """Test volatility forecast with insufficient data."""
+    df = pd.DataFrame({"close": [100]})
+    result = forecast_volatility(df, horizon="24h")
+    assert result["forecast"] is None or np.isnan(result["forecast"])
+    assert result["confidence"] == "low"
+
+
+def test_volatility_forecast_constant_price():
+    """Test volatility forecast with constant price data."""
+    df = pd.DataFrame({"close": [100]*50, "high": [100]*50, "low": [100]*50})
+    result = forecast_volatility(df, horizon="24h")
+    assert result["forecast"] == 0
+    assert result["confidence"] in ["low", "medium"]
+
+def test_regime_detection_trending_high_volatility():
+    """Test regime detection for trending, high volatility market."""
+    n = 100
+    # Strong uptrend, high volatility
+    closes = np.linspace(100, 200, n) + np.random.normal(0, 10, n)
+    df = pd.DataFrame({
+        'close': closes,
+        'high': closes + np.random.uniform(1, 5, n),
+        'low': closes - np.random.uniform(1, 5, n),
+        'ADX_14': [35]*n,  # Strong trend
+        'BBU_20_2.0': closes + 10,
+        'BBL_20_2.0': closes - 10
+    })
+    result = detect_regime(df)
+    assert isinstance(result, dict)
+    assert result['trend_regime'] == 'trending'
+    assert result['volatility_regime'] == 'high_volatility'
+    assert result['confidence'] in ['high', 'medium']
+    assert 'metrics' in result
+
+
+def test_regime_detection_ranging_low_volatility():
+    """Test regime detection for range-bound, low volatility market."""
+    n = 100
+    closes = np.ones(n) * 100 + np.sin(np.linspace(0, 4*np.pi, n)) * 2  # Low volatility
+    df = pd.DataFrame({
+        'close': closes,
+        'high': closes + 1,
+        'low': closes - 1,
+        'ADX_14': [10]*n,  # Weak trend
+        'BBU_20_2.0': closes + 2,
+        'BBL_20_2.0': closes - 2
+    })
+    result = detect_regime(df)
+    assert isinstance(result, dict)
+    assert result['trend_regime'] == 'range_bound'
+    assert result['volatility_regime'] == 'low_volatility'
+    assert result['confidence'] in ['high', 'medium']
+    assert 'metrics' in result
+
+
+def test_regime_detection_ambiguous():
+    """Test regime detection for ambiguous/unclear market."""
+    n = 30
+    closes = np.random.normal(100, 1, n)
+    df = pd.DataFrame({
+        'close': closes,
+        'high': closes + 1,
+        'low': closes - 1,
+        'ADX_14': [15]*n,
+        'BBU_20_2.0': closes + 2,
+        'BBL_20_2.0': closes - 2
+    })
+    result = detect_regime(df)
+    assert isinstance(result, dict)
+    assert result['trend_regime'] in ['ambiguous', 'range_bound', 'trending']
+    assert result['volatility_regime'] in ['ambiguous', 'low_volatility', 'high_volatility']
+    assert result['confidence'] in ['low', 'medium']
+    assert 'metrics' in result
+
+
+def test_regime_detection_insufficient_data():
+    """Test regime detection with insufficient data."""
+    df = pd.DataFrame({'close': [100]})
+    result = detect_regime(df)
+    assert result['trend_regime'] == 'ambiguous'
+    assert result['volatility_regime'] == 'ambiguous'
+    assert result['confidence'] == 'low'
+    assert 'metrics' in result
+
+def test_strategy_suggestion_trending_high_volatility():
+    """Test strategy suggestion for trending, high volatility regime."""
+    regime = {
+        'trend_regime': 'trending',
+        'volatility_regime': 'high_volatility',
+        'confidence': 'high',
+        'metrics': {}
+    }
+    result = suggest_strategy_for_regime(regime)
+    assert isinstance(result, dict)
+    assert result['strategy'] == 'trend_following'
+    assert 'educational_rationale' in result
+    assert 'actionable_advice' in result
+    assert 'leverage' in result['actionable_advice']
+
+
+def test_strategy_suggestion_range_bound_low_volatility():
+    """Test strategy suggestion for range-bound, low volatility regime."""
+    regime = {
+        'trend_regime': 'range_bound',
+        'volatility_regime': 'low_volatility',
+        'confidence': 'high',
+        'metrics': {}
+    }
+    result = suggest_strategy_for_regime(regime)
+    assert isinstance(result, dict)
+    assert result['strategy'] == 'range_trading'
+    assert 'educational_rationale' in result
+    assert 'actionable_advice' in result
+    assert 'leverage' in result['actionable_advice']
+
+
+def test_strategy_suggestion_ambiguous():
+    """Test strategy suggestion for ambiguous regime."""
+    regime = {
+        'trend_regime': 'ambiguous',
+        'volatility_regime': 'ambiguous',
+        'confidence': 'low',
+        'metrics': {}
+    }
+    result = suggest_strategy_for_regime(regime)
+    assert isinstance(result, dict)
+    assert result['strategy'] == 'reduce_exposure'
+    assert 'educational_rationale' in result
+    assert 'actionable_advice' in result
+
+
+def test_strategy_suggestion_insufficient_data():
+    """Test strategy suggestion with insufficient data."""
+    regime = None
+    result = suggest_strategy_for_regime(regime)
+    assert isinstance(result, dict)
+    assert result['strategy'] == 'insufficient_data'
+    assert 'educational_rationale' in result
+    assert 'actionable_advice' in result 

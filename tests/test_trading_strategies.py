@@ -406,4 +406,69 @@ def test_none_data_handling():
     recommendation = generate_trade_recommendation(None)
     assert recommendation['strategy'] == 'insufficient_data'
     assert recommendation['action'] == 'hold'
-    assert recommendation['confidence'] == 'low' 
+    assert recommendation['confidence'] == 'low'
+
+def test_stop_loss_buffer_and_position_size_uptrend(sample_uptrend_data):
+    """Test stop loss buffer and position size logic for uptrend."""
+    sr_levels = detect_support_resistance(sample_uptrend_data)
+    price_targets = calculate_price_targets(sample_uptrend_data, sr_levels)
+    # Stop loss should not be equal to entry/support
+    if sr_levels['supports']:
+        support = float(sr_levels['supports'][0])
+        assert price_targets['stop_loss'] != support
+        # Stop loss should be below support
+        assert price_targets['stop_loss'] < support
+    # Position size should be capped and confidence-scaled
+    price_targets['confidence'] = 'high'
+    risk_metrics = calculate_risk_metrics(sample_uptrend_data, price_targets)
+    assert 0 <= risk_metrics['position_size'] <= 10
+    price_targets['confidence'] = 'medium'
+    risk_metrics = calculate_risk_metrics(sample_uptrend_data, price_targets)
+    assert 0 <= risk_metrics['position_size'] <= 10
+    price_targets['confidence'] = 'low'
+    risk_metrics = calculate_risk_metrics(sample_uptrend_data, price_targets)
+    assert 0 <= risk_metrics['position_size'] <= 10
+
+
+def test_stop_loss_buffer_and_position_size_downtrend(sample_downtrend_data):
+    """Test stop loss buffer and position size logic for downtrend."""
+    sr_levels = detect_support_resistance(sample_downtrend_data)
+    price_targets = calculate_price_targets(sample_downtrend_data, sr_levels)
+    # Stop loss should not be equal to entry/resistance
+    if sr_levels['resistances']:
+        resistance = float(sr_levels['resistances'][0])
+        assert price_targets['stop_loss'] != resistance
+        # Stop loss should be above resistance
+        assert price_targets['stop_loss'] > resistance
+    # Position size should be capped and confidence-scaled
+    price_targets['confidence'] = 'high'
+    risk_metrics = calculate_risk_metrics(sample_downtrend_data, price_targets)
+    assert 0 <= risk_metrics['position_size'] <= 10
+    price_targets['confidence'] = 'medium'
+    risk_metrics = calculate_risk_metrics(sample_downtrend_data, price_targets)
+    assert 0 <= risk_metrics['position_size'] <= 10
+    price_targets['confidence'] = 'low'
+    risk_metrics = calculate_risk_metrics(sample_downtrend_data, price_targets)
+    assert 0 <= risk_metrics['position_size'] <= 10
+
+
+def test_stop_loss_and_position_size_no_support_resistance():
+    """Test logic when no support/resistance is available (edge case)."""
+    # Create a DataFrame with 20 rows and no clear support/resistance
+    n = 20
+    df = pd.DataFrame({
+        'open': np.linspace(100, 119, n),
+        'high': np.linspace(101, 120, n),
+        'low': np.linspace(99, 118, n),
+        'close': np.linspace(100, 119, n),
+        'volume': [1000] * n,
+        'ATR_14': [1] * n
+    })
+    sr_levels = {'supports': [], 'resistances': [], 'key_level': None, 'confidence': 'low'}
+    price_targets = calculate_price_targets(df, sr_levels)
+    # Stop loss should still be set (ATR fallback)
+    assert price_targets['stop_loss'] is not None
+    # Position size should be capped
+    price_targets['confidence'] = 'medium'
+    risk_metrics = calculate_risk_metrics(df, price_targets)
+    assert 0 <= risk_metrics['position_size'] <= 10 

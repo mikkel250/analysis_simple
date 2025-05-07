@@ -1,0 +1,117 @@
+DEBUG: timeframe value from analyzer: 'long', type: <class 'str'>
+DEBUG: About to call print_market_analysis with timeframe='long'
+
+======================================================================
+MARKET ANALYSIS: BTC (LONG - 1d)
+======================================================================
+
+PRICE INFORMATION:
+Current Price: 97285.78
+24H change: 58.32%
+Volatility: 106.55%
+  └─ Volatility measures price fluctuation magnitude. It's calculated as the percentage range between high and low prices relative to the low price. This value falls 
+into the 'extremely high daily volatility' range (>8%), indicating potential market uncertainty.
+  └─ Period return measures price change as a percentage over the analyzed timeframe, calculated as ((current_price - starting_price) / starting_price) * 100. This 
+value indicates a strong bullish movement, potentially suggesting overextension and profit-taking opportunities.
+
+TREND: UPTREND
+Strength: Moderate
+Confidence: High
+
+SIGNALS:
+  Short-term: Neutral
+  Medium-term: Bullish
+  Long-term: Uptrend
+  Recommended Action: HOLD
+
+ADVANCED TRADING RECOMMENDATION:
+  Market Condition: Volatile (Volatile downtrend)
+  Strategy: Rally entries
+  Action: SELL
+  Confidence: Low
+
+  Entry Points:
+    • Sell on rally @ 108268.45
+
+  Exit Points:
+    • Stop Loss @ 108268.45
+    • Target 1 @ 91242.89
+    • Target 2 @ 89260.10
+    • Target 3 @ 79745.12
+
+  Risk Assessment:
+    • Risk/Reward Ratio: 0.55
+    • Risk: 11.29%
+    • Suggested Position Size: 8.86%
+
+  Contrary Indicators:
+    • RSI: 59.985024362359596
+    • MACD: 2408.8201 > -302.3681
+
+Trend Analysis: Trend direction determined by linear regression slope (774.939137) and percent change (58.32%). Trend strength based on ADX value of 23.92. Signals 
+derived from 5 technical indicators. Signal breakdown: 4 bullish, 0 bearish, 1 neutral. 
+
+TECHNICAL INDICATORS:
+
+Trend:
+  - MACD: Bullish
+    ├─ Line: 2408.8201
+    ├─ Signal: -302.3681
+    └─ Histogram: 2711.1881
+    Moving Average Convergence Divergence (MACD) consists of the MACD line (difference between two EMAs), signal line (EMA of the MACD line), and histogram 
+(difference between MACD and signal lines). Interpretation: When MACD crosses above the signal line, it's a potential buy signal; when it crosses below, a potential 
+sell signal. The histogram shows momentum: increasing bars suggest strengthening momentum, decreasing bars suggest weakening momentum. MACD is particularly valuable 
+in crypto markets for identifying potential reversals and trend strength.
+  - SMA: Bullish
+    Simple Moving Average (SMA) calculates the average price over a specified period, giving equal weight to each price point. Interpretation: When price is above the
+SMA, it suggests bullish sentiment; when below, bearish sentiment. Longer period SMAs (50-200) indicate long-term trends, while shorter ones (5-20) show short-term 
+momentum. Cryptocurrency traders often watch for price crossing above/below key SMAs or for SMA crossovers as potential entry/exit signals.
+  - ADX: Moderate Trend
+    └─ Value: 23.92
+    Average Directional Index (ADX) measures trend strength regardless of direction. Interpretation: Values below 20 indicate a weak trend or ranging market; values 
+above 25 indicate a strong trend. Higher values mean stronger trends, not higher prices. ADX doesn't show trend direction, only strength. In crypto markets, which can
+experience extended periods of sideways movement, ADX helps traders determine whether trend-following strategies are appropriate.
+  - ICHIMOKU: Bullish
+    ├─ Tenkan-sen (Conversion): 86171.29
+    ├─ Kijun-sen (Base): 91775.78
+    ├─ Senkou Span A (Leading A): 66667.13
+    ├─ Senkou Span B (Leading B): 95340.07
+    └─ Chikou Span (Lagging): 97285.78
+
+Momentum:
+  - RSI: Neutral
+    └─ Value: 59.99
+    Relative Strength Index (RSI) measures the speed and magnitude of price movements on a scale from 0 to 100. Interpretation: Traditionally, values above 70 
+indicate overbought conditions (potential sell signal); values below 30 indicate oversold conditions (potential buy signal). In stronger trends, these thresholds may 
+shift (80/20 for strong markets). Cryptocurrency markets can maintain overbought/oversold conditions longer than traditional markets, so look for divergences and 
+pattern breaks rather than relying solely on threshold values.
+  - STOCHASTIC: Bullish Crossover
+    ├─ %K: 66.41
+    └─ %D: 51.27
+  - CCI: Neutral
+    └─ Value: 47.38
+    Commodity Channel Index (CCI) measures a security's price deviation from its statistical average. Interpretation: Values above +100 indicate potential overbought 
+conditions; values below -100 indicate potential oversold conditions. Crossing from negative to positive territory may signal bullish momentum; crossing from positive
+to negative may signal bearish momentum. CCI can be particularly useful in crypto markets for identifying potential price extremes and trend reversals.
+
+Volatility:
+  - BOLLINGER: Neutral
+    ├─ Upper Band: 110947.07
+    ├─ Middle Band: 79116.41
+    ├─ Lower Band: 47285.76
+    ├─ Price: 97285.78
+    └─ Position: 22.97% from middle
+  - ATR: High Volatility
+    └─ Value: 8770.33
+    Average True Range (ATR) measures market volatility by calculating the average range between high and low prices. Interpretation: Higher ATR values indicate 
+higher volatility; lower values indicate lower volatility. ATR doesn't provide directional signals but helps set appropriate stop-loss levels and profit targets. 
+Given cryptocurrency's high volatility, ATR is essential for risk management, helping traders set stops that account for normal market fluctuations.
+
+Volume:
+  - OBV: Confirming Uptrend
+    └─ Value: 2641551734708.0
+    On-Balance Volume (OBV) adds volume on up days and subtracts volume on down days to show buying and selling pressure. Interpretation: Rising OBV suggests positive
+volume pressure (buying); falling OBV suggests negative volume pressure (selling). Divergences between OBV and price may signal potential reversals. In crypto 
+markets, where volume can indicate institutional interest, OBV helps validate price movements and identify potential manipulated rallies or selloffs.
+
+======================================================================

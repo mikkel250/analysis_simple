@@ -338,6 +338,14 @@ def calculate_price_targets(data: pd.DataFrame,
         - 'stop_loss': Recommended stop loss level
         - 'targets': List of additional targets in order
         - 'target_methods': Methods used to derive targets
+    
+    Stop Loss Logic:
+        - For long trades (uptrend): stop_loss = support - max(ATR*0.5, 0.5% of support)
+        - For short trades (downtrend): stop_loss = resistance + max(ATR*0.5, 0.5% of resistance)
+        - If no support/resistance, fallback to ATR-based stop loss
+        - ATR is calculated using pandas_ta if not already present in the DataFrame
+    
+    This ensures the stop loss is always a buffer away from entry/support, never equal to entry, and adapts to volatility.
     """
     if data is None or data.empty or len(data) < 20:
         return {
@@ -373,6 +381,13 @@ def calculate_price_targets(data: pd.DataFrame,
                     methods.append('support_level')
         
         # 2. ATR-based targets
+        # Ensure ATR is available, calculate with pandas_ta if not
+        if 'ATR_14' not in data.columns:
+            try:
+                import pandas_ta as ta
+                data['ATR_14'] = ta.atr(data['high'], data['low'], data['close'], length=14)
+            except ImportError:
+                raise ImportError("pandas_ta is required for ATR calculation.")
         atr_value = data['ATR_14'].iloc[-1] if 'ATR_14' in data.columns else None
         if atr_value is not None and not pd.isna(atr_value):
             if trend_direction == 'up':
@@ -434,11 +449,18 @@ def calculate_price_targets(data: pd.DataFrame,
                 
         # Determine stop loss based on support/resistance and ATR
         stop_loss = None
+        # Long/Uptrend: stop loss below support
         if trend_direction == 'up' and sr_levels['supports']:
-            stop_loss = sr_levels['supports'][0]  # Use highest support as stop loss
+            support = float(sr_levels['supports'][0])
+            atr_buffer = atr_value * 0.5 if atr_value is not None and not pd.isna(atr_value) else 0
+            pct_buffer = support * 0.005  # 0.5% of support
+            stop_loss = support - max(atr_buffer, pct_buffer)
+        # Short/Downtrend: stop loss above resistance
         elif trend_direction == 'down' and sr_levels['resistances']:
-            stop_loss = sr_levels['resistances'][0]  # Use lowest resistance as stop loss
-        
+            resistance = float(sr_levels['resistances'][0])
+            atr_buffer = atr_value * 0.5 if atr_value is not None and not pd.isna(atr_value) else 0
+            pct_buffer = resistance * 0.005  # 0.5% of resistance
+            stop_loss = resistance + max(atr_buffer, pct_buffer)
         # If no support/resistance stop loss, use ATR
         if stop_loss is None and atr_value is not None and not pd.isna(atr_value):
             stop_loss = current_price - (atr_value * 2) if trend_direction == 'up' else current_price + (atr_value * 2)
@@ -476,9 +498,19 @@ def calculate_risk_metrics(data: pd.DataFrame,
     Returns:
         Dictionary with risk assessment metrics:
         - 'risk_reward_ratio': Risk to reward ratio
-        - 'position_size': Recommended position sizing
-        - 'max_loss_pct': Maximum loss percentage
+        - 'position_size': Recommended position sizing (as % of capital)
+        - 'max_loss_pct': Maximum loss percentage (risk per trade)
         - 'volatility_adjusted_risk': Risk adjusted for volatility
+    
+    Position Sizing Logic:
+        - risk_per_trade is set by confidence:
+            - High: 1% of capital
+            - Medium: 0.5% of capital
+            - Low: 0.25% of capital
+        - position_size = min(10%, risk_per_trade / (risk per share))
+        - All calculations use numpy for reliability
+    
+    This ensures position sizing is risk-aware, confidence-scaled, and never exceeds the maximum allowed.
     """
     if data is None or data.empty or price_targets['next_target'] is None or price_targets['stop_loss'] is None:
         return {
@@ -507,10 +539,21 @@ def calculate_risk_metrics(data: pd.DataFrame,
         atr_value = data['ATR_14'].iloc[-1] if 'ATR_14' in data.columns else None
         atr_pct = (atr_value / current_price) * 100 if atr_value is not None and not pd.isna(atr_value) else None
         
-        # Recommended position size based on 1% risk per trade
-        # Maximum risk of 1% of total capital on any single trade
-        max_loss_pct = min(1.0, risk_pct)  # Cap max loss at 1%
-        position_size = 100 / risk_pct if risk_pct > 0 else 0  # Position size percentage
+        # Determine confidence level from price_targets if available
+        confidence = price_targets.get('confidence', 'medium')
+        # Set risk per trade based on confidence
+        if confidence == 'high':
+            risk_per_trade = 0.01  # 1%
+        elif confidence == 'medium':
+            risk_per_trade = 0.005  # 0.5%
+        else:
+            risk_per_trade = 0.0025  # 0.25%
+        max_position_pct = 0.10  # 10% cap
+        # Calculate position size as a percentage of capital
+        position_size = 0
+        if risk > 0:
+            raw_position = risk_per_trade / (risk / current_price)
+            position_size = float(np.clip(raw_position, 0, max_position_pct)) * 100  # as percent
         
         # Adjust risk for volatility
         volatility_adjusted_risk = None
@@ -522,7 +565,7 @@ def calculate_risk_metrics(data: pd.DataFrame,
         return {
             'risk_reward_ratio': risk_reward_ratio,
             'position_size': position_size,  # As a percentage of available capital
-            'max_loss_pct': max_loss_pct,
+            'max_loss_pct': risk_per_trade,
             'volatility_adjusted_risk': volatility_adjusted_risk,
             'risk_amount': risk,
             'risk_pct': risk_pct,

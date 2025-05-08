@@ -1,0 +1,115 @@
+DEBUG: timeframe value from analyzer: 'short', type: <class 'str'>
+DEBUG: About to call print_market_analysis with timeframe='short'
+
+==================================================
+MARKET ANALYSIS: BTC (SHORT - 15m)
+==================================================
+
+ADVANCED ANALYTICS:
+  Volatility Forecast:
+    • 24h: 0.30% (Confidence: low)
+    • 4h: 0.37% (Confidence: low)
+    • 1h: 0.33% (Confidence: low)
+  Market Regime:
+    • Trend: Ambiguous | Volatility: Low volatility (Confidence: 
+medium)
+  Strategy Suggestion:
+    • Strategy: Reduce exposure
+    • Rationale: When the market regime is unclear or confidence is 
+low, it is prudent to reduce exposure and avoid aggressive trading. 
+Uncertain conditions increase the risk of whipsaws and losses.
+    • Advice: Reduce position sizes, tighten stops, or stay on the 
+sidelines. Avoid using high leverage. Wait for clearer signals before 
+re-entering.
+
+WHAT TO WATCH FOR:
+  - Watch for ADX to rise above 25 (currently 21.3).
+
+OPEN INTEREST ANALYTICS:
+  Regime: - (Confidence: -)
+  Current Value: 0
+  24h Change: 0.00%
+  Analysis: -
+
+PRICE INFORMATION:
+Current Price: 98002.73
+Change over 5d: 2.12%
+Volatility: 2.64%
+
+TREND: UPTREND
+Strength: Moderate
+Confidence: Low
+
+SIGNALS:
+  Short-term: Neutral
+  Medium-term: Bullish
+  Long-term: Uptrend
+  Recommended Action: BUY
+
+ADVANCED TRADING RECOMMENDATION:
+  Market Condition: Trending (Uptrend)
+  Strategy: Trend following
+  Action: BUY
+  Confidence: Medium
+
+  Entry Points:
+    • Pullback to support @ 97014.45
+    • Immediate entry @ 98002.73
+
+  Exit Points:
+    • Stop Loss @ 96529.38
+    • Target 1 @ 98270.61
+    • Target 2 @ 98629.07
+    • Target 3 @ 99756.24
+
+  Risk Assessment:
+    • Risk/Reward Ratio: 0.18
+    • Risk: 1.50%
+    • Suggested Position Size: 10.00%
+
+  Supporting Indicators:
+    • RSI: 68.49416783698933
+    • MACD: 218.3295 > 137.3616
+    • Stochastic: K(86.7) > D(84.5)
+
+TECHNICAL INDICATORS:
+
+Trend:
+  - MACD: Bullish
+    ├─ Line: 218.3295
+    ├─ Signal: 137.3616
+    └─ Histogram: 80.9679
+  - SMA: Neutral
+  - ADX: Moderate Trend
+    └─ Value: 21.34
+  - ICHIMOKU: Strong Bullish
+    ├─ Tenkan-sen (Conversion): 97482.94
+    ├─ Kijun-sen (Base): 97068.64
+    ├─ Senkou Span A (Leading A): 97011.70
+    ├─ Senkou Span B (Leading B): 96909.63
+    └─ Chikou Span (Lagging): 98002.73
+
+Momentum:
+  - RSI: Neutral
+    └─ Value: 68.49
+  - STOCHASTIC: Overbought
+    ├─ %K: 86.72
+    └─ %D: 84.46
+  - CCI: Overbought
+    └─ Value: 212.25
+
+Volatility:
+  - BOLLINGER: Overbought
+    ├─ Upper Band: 97905.45
+    ├─ Middle Band: 97185.61
+    ├─ Lower Band: 96465.78
+    ├─ Price: 98002.73
+    └─ Position: 0.84% from middle
+  - ATR: Low Volatility
+    └─ Value: 313.17
+
+Volume:
+  - OBV: Confirming Uptrend
+    └─ Value: 105291611136.0
+
+==================================================

@@ -1,0 +1,11 @@
+{
+  "BTCUSDT": {
+    "cache_timestamp": 1746606139.3305972,
+    "data": {
+      "open_interest_value": 100000.0,
+      "open_interest_change_24h": -1.9607843137254901,
+      "trend": "neutral",
+      "interpretation": "Open interest has changed by -1.96% in the last 24 hours. This relatively stable open interest suggests a balance between new positions and positions being closed."
+    }
+  }
+}

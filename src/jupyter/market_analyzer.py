@@ -7,6 +7,7 @@ financial market data using different trading timeframes.
 
 import logging
 from typing import Dict, List, Any, Optional, Union
+from datetime import datetime
 
 import pandas as pd
 import numpy as np
@@ -34,25 +35,29 @@ class MarketAnalyzer:
     Args:
         symbol: Stock ticker symbol to analyze
         timeframe: Trading timeframe ('short', 'medium', 'long')
+        use_test_data: If True, uses test data instead of fetching from API
     """
     
-    def __init__(self, symbol: str, timeframe: str = "medium"):
+    def __init__(self, symbol: str, timeframe: str = "medium", use_test_data: bool = False):
         """
         Initialize the market analyzer.
         
         Args:
             symbol: Stock ticker symbol
             timeframe: Trading timeframe ('short', 'medium', 'long')
+            use_test_data: If True, uses test data instead of fetching from API
         
         Raises:
             ValueError: If the timeframe is invalid
         """
         self.symbol = symbol
         self.timeframe = timeframe.lower()
+        self.use_test_data = use_test_data
         self.trading_style = self._get_trading_style(self.timeframe)
         self.data = None
         self.performance = None
-        self._legacy_indicator_format = False
+        self.analysis_results = {}
+        self.visualizations = {}
         
         logger.info(f"Initialized MarketAnalyzer for {symbol} with {timeframe} timeframe")
     
@@ -88,7 +93,42 @@ class MarketAnalyzer:
         Raises:
             ValueError: If no data is found for the symbol
         """
-        # Get the interval and period from the trading style
+        from src.jupyter.kernel.market_data import fetch_market_data
+        
+        # Use test data for testing purposes
+        if self.use_test_data:
+            # Create mock data with 100 rows
+            dates = pd.date_range(end=pd.Timestamp.now(), periods=100, freq='15min')
+            
+            # Generate random price data with a slight uptrend
+            base_price = 50000  # Base price for BTC
+            trend = np.linspace(0, 0.05, 100)  # 5% uptrend
+            noise = np.random.normal(0, 0.01, 100)  # 1% daily volatility
+            
+            # Calculate OHLCV data
+            close_prices = base_price * (1 + trend + noise)
+            open_prices = close_prices * (1 + np.random.normal(0, 0.002, 100))
+            high_prices = np.maximum(close_prices, open_prices) * (1 + abs(np.random.normal(0, 0.003, 100)))
+            low_prices = np.minimum(close_prices, open_prices) * (1 - abs(np.random.normal(0, 0.003, 100)))
+            volumes = np.random.normal(1000, 200, 100) * (1 + abs(noise) * 5)
+            
+            # Create DataFrame
+            self.data = pd.DataFrame({
+                'date': dates,
+                'open': open_prices,
+                'high': high_prices,
+                'low': low_prices,
+                'close': close_prices,
+                'volume': volumes
+            })
+            
+            # Set index
+            self.data.set_index('date', inplace=True)
+            logger.info(f"Using test data for {self.symbol}")
+            
+            return self.data
+        
+        # Otherwise fetch real data
         interval = self.trading_style['intervals'][1]  # Middle option as default
         period = self.trading_style['periods'][1]      # Middle option as default
         
@@ -96,7 +136,7 @@ class MarketAnalyzer:
         
         try:
             # Fetch the data
-            self.data = market_data.get_stock_data(
+            self.data = fetch_market_data(
                 symbol=self.symbol,
                 interval=interval,
                 period=period
@@ -278,9 +318,21 @@ class MarketAnalyzer:
         
         # Determine trend
         trend_data = self._determine_trend()
-        
-        # For backward compatibility, extract just the direction if trend_data is a dictionary
-        trend = trend_data['direction'] if isinstance(trend_data, dict) else trend_data
+        if not isinstance(trend_data, dict):
+            # Wrap string in a dict with sensible defaults
+            trend_data = {
+                'direction': trend_data,
+                'strength': "Unknown",
+                'confidence': "Unknown",
+                'signals': {
+                    'short_term': "Unknown",
+                    'medium_term': "Unknown",
+                    'long_term': "Unknown",
+                    'action': "Hold"
+                },
+                'explanation': "Trend returned as string, not dict. Upstream logic should be improved."
+            }
+        trend = trend_data['direction']
         
         # Summarize indicators
         indicator_data = self._summarize_indicators()
@@ -1194,11 +1246,7 @@ class MarketAnalyzer:
         if 'ichimoku' in result:
             indicator_interpretations['ichimoku'] = result['ichimoku']['interpretation']
         
-        # If called in a context expecting the old format, return just the interpretations
-        if hasattr(self, '_legacy_indicator_format') and self._legacy_indicator_format:
-            return indicator_interpretations
-            
-        # For the new format, include both the flat interpretation dictionary and the detailed data
+        # Always return the structured format with interpretations included
         result.update({
             # Include a flat dictionary of interpretations for backward compatibility
             'interpretations': indicator_interpretations
@@ -1474,22 +1522,26 @@ class MarketAnalyzer:
 
     def get_advanced_analytics(self) -> Dict[str, Any]:
         """
-        Compute advanced analytics: volatility forecast, regime detection, and strategy suggestion.
+        Compute advanced analytics: volatility forecast, regime detection, strategy suggestion, and open interest analysis.
         Returns:
             Dict with keys:
                 - 'volatility_forecast': dict of forecasts for 24h, 4h, 1h
                 - 'regime': output of detect_regime
                 - 'strategy_suggestion': output of suggest_strategy_for_regime
                 - 'watch_for_signals': list of 'what to watch for' signals (optional)
+                - 'open_interest_analysis': dict with OI regime and summary (educational, actionable)
         """
         from src.services.indicators import forecast_volatility
         from src.services.trading_strategies import detect_regime, suggest_strategy_for_regime, generate_watch_for_signals
+        from src.services.open_interest import fetch_open_interest
+
         if self.data is None or self.data.empty:
             return {
                 'volatility_forecast': {},
                 'regime': {'trend_regime': 'ambiguous', 'volatility_regime': 'ambiguous', 'confidence': 'low', 'metrics': {}},
                 'strategy_suggestion': {'strategy': 'insufficient_data', 'educational_rationale': 'Not enough data to determine a safe or effective strategy.', 'actionable_advice': 'Do not open new positions.'},
-                'watch_for_signals': ["Watch for more price action and indicator signals to develop before trading."]
+                'watch_for_signals': ["Watch for more price action and indicator signals to develop before trading."],
+                'open_interest_analysis': {'regime': 'insufficient_data', 'confidence': 'low', 'summary': 'No open interest data available.'}
             }
         # Volatility forecasts
         volatility_forecast = {
@@ -1504,9 +1556,74 @@ class MarketAnalyzer:
         watch_for_signals = []
         if strategy_suggestion.get('strategy') in ['insufficient_data', 'reduce_exposure']:
             watch_for_signals = generate_watch_for_signals(regime, regime.get('metrics', {}))
+        
+        # Open Interest Analytics
+        try:
+            # Fetch open interest data that already includes enhanced analysis
+            oi_data = fetch_open_interest(self.symbol)
+            
+            # Get the latest price from our data
+            latest_price = float(self.data['close'].iloc[-1]) if not self.data.empty else 0
+            
+            # If we have successful data but it's missing the enhanced fields, add them
+            if not oi_data.get('error') and 'metrics' not in oi_data and 'trading_signals' not in oi_data:
+                # Create a simulated time series for analyze_open_interest
+                from src.services.open_interest import analyze_open_interest
+                
+                # Create historical data points for analysis
+                historical_data = []
+                
+                # Current point
+                current_oi = oi_data.get('open_interest_value', 0)
+                current_timestamp = int(datetime.now().timestamp() * 1000)
+                
+                # Calculate previous point based on 24h change
+                oi_change_24h = oi_data.get('open_interest_change_24h', 0)
+                previous_oi = current_oi / (1 + (oi_change_24h / 100)) if oi_change_24h != -100 else current_oi
+                
+                # Generate simple data points for analysis
+                historical_data = [
+                    {
+                        'timestamp': current_timestamp - (24 * 3600 * 1000),  # 24 hours ago
+                        'open_interest': previous_oi,
+                        'price': latest_price * 0.98,  # Approximate previous price
+                        'volume': 1000  # Placeholder volume
+                    },
+                    {
+                        'timestamp': current_timestamp,
+                        'open_interest': current_oi,
+                        'price': latest_price,
+                        'volume': 1000  # Placeholder volume
+                    }
+                ]
+                
+                # Get enhanced analysis
+                enhanced_analysis = analyze_open_interest(historical_data)
+                
+                # Merge the enhanced analysis with existing data
+                oi_data.update(enhanced_analysis)
+            
+            # Use the obtained OI data (either with existing or added enhanced fields)
+            # This preserves all available information
+            oi_analysis = oi_data
+            
+        except Exception as e:
+            logging.error(f"Error fetching open interest data: {e}")
+            oi_analysis = {
+                'regime': 'error', 
+                'confidence': 'low',
+                'summary': f'Error fetching or analyzing open interest: {e}',
+                'value': 0,
+                'change_24h': 0,
+                'trading_signals': {'signal': 'neutral', 'action': 'wait', 'entry': None, 'stop_loss': None, 'take_profit': None},
+                'metrics': {},
+                'divergence': {'detected': False, 'type': None, 'strength': 0}
+            }
+        
         return {
             'volatility_forecast': volatility_forecast,
             'regime': regime,
             'strategy_suggestion': strategy_suggestion,
-            'watch_for_signals': watch_for_signals
+            'watch_for_signals': watch_for_signals,
+            'open_interest_analysis': oi_analysis
         } 

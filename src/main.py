@@ -10,7 +10,6 @@ import os
 import sys
 import typer
 from typing import Optional
-from colorama import Fore, Style
 
 # Add the src directory to the Python path if running from the project root
 src_dir = os.path.dirname(os.path.abspath(__file__))
@@ -26,7 +25,8 @@ from src.cli.commands import (
     status_app,
     clean_app,
     jupyter_app,
-    analyzer_app
+    analyzer_app,
+    config_app
 )
 
 # Create the main app instance
@@ -40,13 +40,14 @@ app.add_typer(status_app, name="status")
 app.add_typer(clean_app, name="clean")
 app.add_typer(jupyter_app, name="jupyter")
 app.add_typer(analyzer_app, name="analyzer")
+app.add_typer(config_app, name="config")
 
 # Display information about the local calculation feature
 @app.callback()
 def callback():
     """BTC-USDT Market Analysis CLI"""
-    print(f"{Fore.BLUE}ℹ Using local calculations for technical indicators.")
-    print(f"ℹ No API rate limits apply to indicator calculations.{Style.RESET_ALL}")
+    print("ℹ Using local calculations for technical indicators.")
+    print("ℹ No API rate limits apply to indicator calculations.")
 
 if __name__ == "__main__":
     app() 

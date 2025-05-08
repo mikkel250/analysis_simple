@@ -90,6 +90,29 @@ def get_stock_data(
     
     return data
 
+def fetch_market_data(
+    symbol: str, 
+    period: str = 'max', 
+    interval: str = '1d',
+    start: Optional[dt.datetime] = None,
+    end: Optional[dt.datetime] = None
+) -> pd.DataFrame:
+    """
+    Fetch market data using yfinance (alias for get_stock_data).
+    
+    Args:
+        symbol: Trading symbol (e.g., 'BTC-USDT', 'ETH-USDT')
+        period: Valid periods: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max
+        interval: Valid intervals: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
+        start: Start date for data fetching
+        end: End date for data fetching
+    
+    Returns:
+        DataFrame containing the market data
+    """
+    logger.info(f"Fetching market data for {symbol} with interval={interval}, period={period}")
+    return get_stock_data(symbol=symbol, period=period, interval=interval, start=start, end=end)
+
 def get_multiple_stocks(
     symbols: List[str], 
     period: str = 'max', 
@@ -822,8 +845,8 @@ def get_performance_summary(data: pd.DataFrame, price_col: str = 'close') -> Dic
     Returns:
         Dictionary of performance metrics
     """
-    # Calculate returns
-    df = calculate_returns(data, price_col=price_col)
+    # Use percent returns for correct annualized return/volatility in percent
+    df = calculate_returns(data, price_col=price_col, return_type='pct')
     
     # Calculate performance metrics
     start_price = df[price_col].iloc[0]

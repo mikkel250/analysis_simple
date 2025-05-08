@@ -1,0 +1,108 @@
+DEBUG: timeframe value from analyzer: 'short', type: <class 'str'>
+DEBUG: About to call print_market_analysis with timeframe='short'
+
+==================================================
+MARKET ANALYSIS: BTC-USDT (SHORT - 15m)
+==================================================
+
+ADVANCED ANALYTICS:
+  Volatility Forecast:
+    • 24h: 0.81% (Confidence: medium)
+    • 4h: 0.47% (Confidence: low)
+    • 1h: 0.27% (Confidence: low)
+  Market Regime:
+    • Trend: Range bound | Volatility: Low volatility (Confidence: high)
+  Strategy Suggestion:
+    • Strategy: Range trading
+    • Rationale: Range-bound, low volatility markets are best suited for mean-reversion and range-trading 
+strategies. Leverage can be used, but with smaller position sizes due to limited price movement.
+    • Advice: Buy near support, sell near resistance. Use tight stops and small to moderate leverage (e.g.,
+1-3x). Take profits quickly. Avoid chasing breakouts.
+
+OPEN INTEREST ANALYTICS:
+  Regime: - (Confidence: -)
+  Current Value: 0
+  24h Change: 0.00%
+  Analysis: -
+
+PRICE INFORMATION:
+Current Price: 53052.61
+Change over 5d: 7.42%
+Volatility: 19.41%
+
+TREND: UPTREND
+Strength: Weak
+Confidence: Medium
+
+SIGNALS:
+  Short-term: Neutral
+  Medium-term: Bullish
+  Long-term: Uptrend
+  Recommended Action: HOLD
+
+ADVANCED TRADING RECOMMENDATION:
+  Market Condition: Ranging (Sideways)
+  Strategy: Range trading
+  Action: SELL
+  Confidence: Low
+
+  Entry Points:
+    • Sell near resistance @ 53441.64
+
+  Exit Points:
+    • Stop Loss @ 51623.44
+    • Target 1 @ 53441.64
+    • Target 2 @ 54235.92
+    • Target 3 @ 55208.55
+
+  Risk Assessment:
+    • Risk/Reward Ratio: 0.27
+    • Risk: 2.69%
+    • Suggested Position Size: 10.00%
+
+  Supporting Indicators:
+    • RSI: 59.28311508490587
+    • MACD: 263.0574 > 78.4092
+    • Stochastic: K(85.6) > D(81.5)
+
+TECHNICAL INDICATORS:
+
+Trend:
+  - MACD: Bullish
+    ├─ Line: 263.0574
+    ├─ Signal: 78.4092
+    └─ Histogram: 184.6482
+  - SMA: Neutral
+  - ADX: Weak Trend
+    └─ Value: 8.43
+  - ICHIMOKU: Strong Bullish
+    ├─ Tenkan-sen (Conversion): 52630.14
+    ├─ Kijun-sen (Base): 52012.10
+    ├─ Senkou Span A (Leading A): 51655.90
+    ├─ Senkou Span B (Leading B): 51081.41
+    └─ Chikou Span (Lagging): 53052.61
+
+Momentum:
+  - RSI: Neutral
+    └─ Value: 59.28
+  - STOCHASTIC: Overbought
+    ├─ %K: 85.58
+    └─ %D: 81.52
+  - CCI: Overbought
+    └─ Value: 181.84
+
+Volatility:
+  - BOLLINGER: Neutral
+    ├─ Upper Band: 53214.44
+    ├─ Middle Band: 52426.87
+    ├─ Lower Band: 51639.30
+    ├─ Price: 53052.61
+    └─ Position: 1.19% from middle
+  - ATR: Low Volatility
+    └─ Value: 591.66
+
+Volume:
+  - OBV: Confirming Uptrend
+    └─ Value: 12320.080820028877
+
+==================================================

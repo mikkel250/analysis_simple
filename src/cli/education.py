@@ -5,8 +5,6 @@ This module provides explanations for various technical indicators, their interp
 and their significance in cryptocurrency market analysis.
 """
 
-from colorama import Fore, Style
-
 # Helper functions for formatted text
 def category_header(text):
     """Format a category header - plain text version."""

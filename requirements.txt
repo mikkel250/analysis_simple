@@ -30,3 +30,7 @@ ipykernel>=6.28.0
 matplotlib>=3.8.0
 plotly>=5.19.0
 jupyterlab>=4.1.0
+
+# New dependency
+python-binance==1.0.19
+python-dotenv==1.0.0

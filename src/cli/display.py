@@ -5,28 +5,15 @@ Functions for formatting and displaying output in the terminal.
 """
 
 from typing import List, Dict, Any, Union, Optional
-import colorama
-from colorama import Fore, Style
 from tabulate import tabulate
 import datetime
 from tqdm import tqdm
 import contextlib
 
-# Initialize colorama with improved parameters
-colorama.init(strip=False, convert=True, wrap=True)
-
 def supports_color() -> bool:
     """Check if the current terminal supports color."""
-    import os, sys
-    # Check for NO_COLOR environment variable
-    if os.getenv('NO_COLOR') is not None:
-        return False
-    # Check for Windows terminal
-    is_windows = sys.platform == 'win32'
-    # Check for common CI environments
-    is_ci = os.getenv('CI', '') or os.getenv('TEAMCITY_VERSION', '')
-    # Check for TTY
-    return sys.stdout.isatty() and not is_ci and not (is_windows and 'ANSICON' not in os.environ)
+    # Always return False since we're not using colors anymore
+    return False
 
 def display_info(message: str) -> None:
     """
@@ -35,7 +22,7 @@ def display_info(message: str) -> None:
     Args:
         message: Message to display
     """
-    print(f"{Fore.BLUE}ℹ {message}{Style.RESET_ALL}")
+    print(f"ℹ {message}")
 
 def display_success(message: str) -> None:
     """
@@ -44,7 +31,7 @@ def display_success(message: str) -> None:
     Args:
         message: Message to display
     """
-    print(f"{Fore.GREEN}✓ {message}{Style.RESET_ALL}")
+    print(f"✓ {message}")
 
 def display_warning(message: str) -> None:
     """
@@ -53,7 +40,7 @@ def display_warning(message: str) -> None:
     Args:
         message: Message to display
     """
-    print(f"{Fore.YELLOW}⚠ {message}{Style.RESET_ALL}")
+    print(f"⚠ {message}")
 
 def display_error(message: str) -> None:
     """
@@ -62,7 +49,7 @@ def display_error(message: str) -> None:
     Args:
         message: Message to display
     """
-    print(f"{Fore.RED}✗ Error: {message}{Style.RESET_ALL}")
+    print(f"✗ Error: {message}")
 
 def display_table(data: List[List[Any]]) -> None:
     """
@@ -75,28 +62,25 @@ def display_table(data: List[List[Any]]) -> None:
 
 def format_price(price: Union[float, str], trend: str = 'neutral', use_color: bool = True) -> str:
     """
-    Format price data with color based on trend
+    Format price data with trend indicators
     
     Args:
         price: The price value
         trend: Trend direction ('up', 'down', or 'neutral')
-        use_color: Whether to use color formatting (default: True)
+        use_color: Parameter kept for compatibility, has no effect
         
     Returns:
-        Formatted price string with color
+        Formatted price string with optional trend indicator
     """
     formatted_price = f"{float(price):.2f}" if isinstance(price, (int, float)) else price
     
-    # Skip color formatting if colors aren't supported or explicitly disabled
-    if not use_color or not supports_color():
-        return formatted_price
-    
+    # Add trend indicators instead of colors
     if trend == 'up':
-        return f"{Fore.GREEN}{formatted_price}{Style.RESET_ALL}"
+        return f"{formatted_price} ↑"
     elif trend == 'down':
-        return f"{Fore.RED}{formatted_price}{Style.RESET_ALL}"
+        return f"{formatted_price} ↓"
     else:
-        return f"{Fore.WHITE}{formatted_price}{Style.RESET_ALL}"
+        return formatted_price
 
 def display_data_age(timestamp: datetime.datetime) -> None:
     """

@@ -1,0 +1,130 @@
+DEBUG: timeframe value from analyzer: 'long', type: <class 'str'>
+DEBUG: About to call print_market_analysis with timeframe='long'
+
+==================================================
+MARKET ANALYSIS: BTC (LONG - 1d)
+==================================================
+
+ADVANCED ANALYTICS:
+  Volatility Forecast:
+    • 24h: 6.32% (Confidence: high)
+    • 4h: 5.68% (Confidence: high)
+    • 1h: 5.25% (Confidence: high)
+  Market Regime:
+    • Trend: Ambiguous | Volatility: High volatility (Confidence: medium)
+  Strategy Suggestion:
+    • Strategy: Reduce exposure
+    • Rationale: When the market regime is unclear or confidence is low, it is prudent to 
+reduce exposure and avoid aggressive trading. Uncertain conditions increase the risk of 
+whipsaws and losses.
+    • Advice: Reduce position sizes, tighten stops, or stay on the sidelines. Avoid using 
+high leverage. Wait for clearer signals before re-entering.
+
+BREAKOUT STRATEGY ANALYSIS:
+  Market Condition: Unknown (Strength: Low)
+
+  Long Breakout:
+    • Entry Point: 122063.07 (0.00% above current price)
+    • Stop Loss: 0.00 (0.00% below entry)
+    • Target 1: 140455.89 (R/R: 0.0)
+    • Target 2: 154250.52 (R/R: 0.0)
+    • Target 3: 168045.14 (R/R: 0.0)
+    • Confidence: Low
+
+  Short Breakout:
+    • Entry Point: 77448.27 (0.00% below current price)
+    • Stop Loss: 0.00 (0.00% above entry)
+    • Target 1: 59055.44 (R/R: 0.0)
+    • Target 2: 45260.82 (R/R: 0.0)
+    • Target 3: 31466.20 (R/R: 0.0)
+    • Confidence: Low
+
+WHAT TO WATCH FOR:
+  - Watch for ADX to rise above 25 (currently 24.6).
+
+OPEN INTEREST ANALYTICS:
+  Regime: - (Confidence: -)
+  Current Value: 0
+  24h Change: 0.00%
+  Analysis: -
+
+PRICE INFORMATION:
+Current Price: 102831.77
+Change over 1y: 67.35%
+Volatility: 107.82%
+
+TREND: UPTREND
+Strength: Moderate
+Confidence: High
+
+SIGNALS:
+  Short-term: Neutral
+  Medium-term: Bullish
+  Long-term: Uptrend
+  Recommended Action: HOLD
+
+ADVANCED TRADING RECOMMENDATION:
+  Market Condition: Volatile (Volatile downtrend)
+  Strategy: Rally entries
+  Action: SELL
+  Confidence: Low
+
+  Entry Points:
+    • Sell on rally @ 108268.45
+
+  Exit Points:
+    • Stop Loss @ 112866.65
+    • Target 1 @ 91242.89
+    • Target 2 @ 89260.10
+    • Target 3 @ 84438.95
+
+  Risk Assessment:
+    • Risk/Reward Ratio: 1.15
+    • Risk: 9.76%
+    • Suggested Position Size: 5.12%
+
+  Contrary Indicators:
+    • RSI: 63.74762126073591
+    • MACD: 2851.2354 > 51.5642
+
+TECHNICAL INDICATORS:
+
+Trend:
+  - MACD: Bullish
+    ├─ Line: 2851.2354
+    ├─ Signal: 51.5642
+    └─ Histogram: 2799.6712
+  - SMA: Bullish
+  - ADX: Moderate Trend
+    └─ Value: 24.60
+  - ICHIMOKU: Bullish
+    ├─ Tenkan-sen (Conversion): 88846.44
+    ├─ Kijun-sen (Base): 91775.78
+    ├─ Senkou Span A (Leading A): 66667.13
+    ├─ Senkou Span B (Leading B): 100775.14
+    └─ Chikou Span (Lagging): 102831.77
+
+Momentum:
+  - RSI: Neutral
+    └─ Value: 63.75
+  - STOCHASTIC: Bullish Crossover
+    ├─ %K: 72.13
+    └─ %D: 53.17
+  - CCI: Neutral
+    └─ Value: 83.05
+
+Volatility:
+  - BOLLINGER: Neutral
+    ├─ Upper Band: 111347.81
+    ├─ Middle Band: 79227.33
+    ├─ Lower Band: 47106.86
+    ├─ Price: 102831.77
+    └─ Position: 29.79% from middle
+  - ATR: High Volatility
+    └─ Value: 9196.41
+
+Volume:
+  - OBV: Confirming Uptrend
+    └─ Value: 2732584665281.0
+
+==================================================

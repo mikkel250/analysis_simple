@@ -104,13 +104,7 @@ The tool has the following main commands:
    - `python src/main.py clean by-type <type>` - Clean cached data of a specific type
    - `python src/main.py clean by-symbol <symbol>` - Clean cached data for a specific symbol
 
-6. **Jupyter Commands**
-   - `python src/main.py jupyter start` - Start a Jupyter notebook server with the analysis environment
-   - `python src/main.py jupyter demo` - Launch a demo notebook with cryptocurrency visualizations
-   - `python src/main.py jupyter run <notebook>` - Run a specific example notebook
-   - `python src/main.py jupyter analysis <symbol>` - Generate and launch a market analysis notebook for a specific symbol
-
-7. **Market Analyzer Commands**
+6. **Market Analyzer Commands**
    - `python src/main.py analyzer analyze` - Generate comprehensive market analysis for BTC with short timeframe (default)
    - `python src/main.py analyzer analyze --timeframe medium` - Generate analysis with medium timeframe
    - `python src/main.py analyzer analyze --output json` - Output analysis in JSON format
@@ -179,40 +173,6 @@ This will display:
 The educational content now appears directly under each indicator for improved context and readability. This integrated approach ensures that explanations are provided exactly where they're most relevant, making it easier to understand the significance of each indicator's current value.
 
 The educational content is designed to help users understand technical analysis concepts and make more informed trading decisions.
-
-## Jupyter Integration
-
-The tool integrates with Jupyter notebooks to provide interactive analysis capabilities:
-
-```bash
-# Start a Jupyter notebook server with the analysis environment
-python src/main.py jupyter start
-
-# Launch a demo notebook with cryptocurrency visualizations
-python src/main.py jupyter demo
-
-# Run a specific example notebook
-python src/main.py jupyter run price_analysis
-
-# Generate and launch a market analysis notebook for BTC with short timeframe (default)
-python src/main.py jupyter analysis BTC
-
-# Generate and launch a notebook with medium timeframe
-python src/main.py jupyter analysis BTC --timeframe medium
-
-# Generate a notebook without launching it
-python src/main.py jupyter analysis ETH --timeframe long --no-launch
-
-# Generate a notebook to a custom location
-python src/main.py jupyter analysis BTC --output custom_notebook.ipynb
-```
-
-The Jupyter integration provides:
-- Interactive data visualizations
-- Custom analysis notebooks for different trading timeframes
-- Educational content with code examples
-- Ability to modify and extend the analysis for specific use cases
-- Exportable reports and charts
 
 ## Market Analyzer
 

@@ -1,0 +1,113 @@
+DEBUG: timeframe value from analyzer: 'short', type: <class 'str'>
+DEBUG: About to call print_market_analysis with timeframe='short'
+
+==================================================
+MARKET ANALYSIS: BTC (SHORT - 15m)
+==================================================
+
+ADVANCED ANALYTICS:
+  Volatility Forecast:
+    • 24h: 0.11% (Confidence: low)
+    • 4h: 0.10% (Confidence: low)
+    • 1h: 0.09% (Confidence: low)
+  Market Regime:
+    • Trend: Trending | Volatility: Low volatility (Confidence: high)
+  Strategy Suggestion:
+    • Strategy: Insufficient data
+    • Rationale: Not enough data to determine a safe or effective strategy. Wait for more price action and 
+indicator signals before trading.
+    • Advice: Do not open new positions. Monitor the market and wait for clearer signals.
+
+WHAT TO WATCH FOR:
+  - Watch for stronger trend, higher volatility, or clearer indicator signals before trading.
+
+OPEN INTEREST ANALYTICS:
+  Regime: - (Confidence: -)
+  Current Value: 0
+  24h Change: 0.00%
+  Analysis: -
+
+PRICE INFORMATION:
+Current Price: 99356.36
+Change over 5d: 3.53%
+Volatility: 2.56%
+
+TREND: UPTREND
+Strength: Strong
+Confidence: Low
+
+SIGNALS:
+  Short-term: Neutral
+  Medium-term: Bullish
+  Long-term: Uptrend
+  Recommended Action: SELL
+
+ADVANCED TRADING RECOMMENDATION:
+  Market Condition: Trending (Downtrend)
+  Strategy: Trend following
+  Action: SELL
+  Confidence: Medium
+
+  Entry Points:
+    • Pullback to resistance @ 99365.77
+    • Immediate entry @ 99356.36
+
+  Exit Points:
+    • Stop Loss @ 99862.59
+    • Target 1 @ 99300.41
+    • Target 2 @ 99272.35
+    • Target 3 @ 99196.34
+
+  Risk Assessment:
+    • Risk/Reward Ratio: 0.11
+    • Risk: 0.51%
+    • Suggested Position Size: 10.00%
+
+  Supporting Indicators:
+    • RSI: 49.83292533336571
+
+  Contrary Indicators:
+    • MACD: 65.1945 > -86.6696
+    • Stochastic: K(6.2) D(4.7)
+
+TECHNICAL INDICATORS:
+
+Trend:
+  - MACD: Bullish
+    ├─ Line: 65.1945
+    ├─ Signal: -86.6696
+    └─ Histogram: 151.8642
+  - SMA: Neutral
+  - ADX: Strong Trend
+    └─ Value: 27.63
+  - ICHIMOKU: Strong Bullish
+    ├─ Tenkan-sen (Conversion): 99483.59
+    ├─ Kijun-sen (Base): 99450.37
+    ├─ Senkou Span A (Leading A): 98567.25
+    ├─ Senkou Span B (Leading B): 97626.71
+    └─ Chikou Span (Lagging): 99356.36
+
+Momentum:
+  - RSI: Neutral
+    └─ Value: 49.83
+  - STOCHASTIC: Oversold
+    ├─ %K: 6.16
+    └─ %D: 4.66
+  - CCI: Oversold
+    └─ Value: -127.29
+
+Volatility:
+  - BOLLINGER: Neutral
+    ├─ Upper Band: 99670.04
+    ├─ Middle Band: 99434.17
+    ├─ Lower Band: 99198.31
+    ├─ Price: 99356.36
+    └─ Position: -0.08% from middle
+  - ATR: Low Volatility
+    └─ Value: 142.24
+
+Volume:
+  - OBV: Confirming Uptrend
+    └─ Value: 183956384768.0
+
+==================================================

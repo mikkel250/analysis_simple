@@ -1,0 +1,126 @@
+DEBUG: timeframe value from analyzer: 'medium', type: <class 'str'>
+DEBUG: About to call print_market_analysis with timeframe='medium'
+
+==================================================
+MARKET ANALYSIS: BTC (MEDIUM - 4h)
+==================================================
+
+ADVANCED ANALYTICS:
+  Volatility Forecast:
+    • 24h: 0.88% (Confidence: medium)
+    • 4h: 0.94% (Confidence: medium)
+    • 1h: 1.13% (Confidence: high)
+  Market Regime:
+    • Trend: Trending | Volatility: High volatility (Confidence: high)
+  Strategy Suggestion:
+    • Strategy: Trend following
+    • Rationale: Trending markets with high volatility are ideal for trend-following 
+strategies. Use leverage judiciously to maximize gains, but be aware of increased risk and 
+potential for large swings.
+    • Advice: Consider entering in the direction of the trend on pullbacks. Use tight stop 
+losses and moderate leverage (e.g., 2-5x). Scale in/out as volatility increases. Avoid 
+overexposure.
+
+BREAKOUT STRATEGY ANALYSIS:
+  Market Condition: Non consolidation (Strength: Low)
+
+  Support Levels:
+    • 101286.35 (1.70% below current price)
+    • 99122.68 (3.80% below current price)
+    • 96381.79 (6.46% below current price)
+
+  Short Breakout:
+    • Entry Point: 101275.24 (1.71% below current price)
+    • Stop Loss: 101308.58 (0.03% above entry)
+    • Target 1: 101191.87 (R/R: 2.5)
+    • Confidence: Low
+
+OPEN INTEREST ANALYTICS:
+  Regime: - (Confidence: -)
+  Current Value: 0
+  24h Change: 0.00%
+  Analysis: -
+
+PRICE INFORMATION:
+Current Price: 103038.58
+Change over 3mo: 5.96%
+Volatility: 18.44%
+
+TREND: SIDEWAYS
+Strength: Strong
+Confidence: Low
+
+SIGNALS:
+  Short-term: Bearish
+  Medium-term: Bullish
+  Long-term: Neutral
+  Recommended Action: BUY
+
+ADVANCED TRADING RECOMMENDATION:
+  Market Condition: Trending (Strong uptrend)
+  Strategy: Trend following
+  Action: BUY
+  Confidence: High
+
+  Entry Points:
+    • Pullback to support @ 101286.35
+    • Immediate entry @ 103038.58
+
+  Exit Points:
+    • Stop Loss @ 100730.55
+    • Target 1 @ 105261.78
+    • Target 2 @ 110165.31
+
+  Risk Assessment:
+    • Risk/Reward Ratio: 0.96
+    • Risk: 2.24%
+    • Suggested Position Size: 10.00%
+
+  Supporting Indicators:
+    • RSI: 80.99819860069549
+    • MACD: 1771.5979 > 694.3303
+
+  Contrary Indicators:
+    • Stochastic: K(92.6) D(92.6)
+
+TECHNICAL INDICATORS:
+
+Trend:
+  - MACD: Bullish
+    ├─ Line: 1771.5979
+    ├─ Signal: 694.3303
+    └─ Histogram: 1077.2676
+  - SMA: Bullish
+  - ADX: Strong Trend
+    └─ Value: 39.28
+  - ICHIMOKU: Strong Bullish
+    ├─ Tenkan-sen (Conversion): 99821.50
+    ├─ Kijun-sen (Base): 98607.23
+    ├─ Senkou Span A (Leading A): 95683.93
+    ├─ Senkou Span B (Leading B): 95384.07
+    └─ Chikou Span (Lagging): 103038.58
+
+Momentum:
+  - RSI: Overbought
+    └─ Value: 81.00
+  - STOCHASTIC: Overbought
+    ├─ %K: 92.61
+    └─ %D: 92.65
+  - CCI: Overbought
+    └─ Value: 167.50
+
+Volatility:
+  - BOLLINGER: Neutral
+    ├─ Upper Band: 103085.87
+    ├─ Middle Band: 97521.48
+    ├─ Lower Band: 91957.10
+    ├─ Price: 103038.58
+    └─ Position: 5.66% from middle
+  - ATR: Low Volatility
+    └─ Value: 1111.60
+
+Volume:
+  - OBV: Confirming Downtrend
+    └─ Value: -14326518784.0
+
+==================================================

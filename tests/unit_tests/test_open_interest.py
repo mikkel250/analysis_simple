@@ -64,16 +64,21 @@ def test_fetch_open_interest(mock_client_class, mock_binance_client):
     mock_client_class.return_value = mock_binance_client
     
     # Ensure _get_cached_data returns None to force API call
-    with patch('src.services.open_interest._get_cached_data', return_value=None):
-        # Call the function
+    with patch('src.services.open_interest._get_cached_data', return_value=None), \
+         patch('src.services.open_interest._fetch_okx_open_interest') as mock_fetch_okx:
+        # Configure the mock to return a valid result
+        mock_fetch_okx.return_value = {
+            "open_interest_value": 100000.0,
+            "open_interest_change_24h": -1.96,
+            "trend": "neutral",
+            "interpretation": "Open interest has changed by -1.96% in the last 24 hours. This relatively stable open interest suggests a balance between new positions and positions being closed."
+        }
+        
+        # Call the function - now OKX is the default
         result = fetch_open_interest("BTC-USDT")
     
-    # Verify client was initialized
-    mock_client_class.assert_called_once()
-    
-    # Verify API calls were made with correct parameters
-    mock_binance_client.futures_open_interest.assert_called_once_with(symbol="BTCUSDT")
-    mock_binance_client.futures_open_interest_hist.assert_called_once()
+    # Verify OKX function was called
+    mock_fetch_okx.assert_called_once()
     
     # Check the result format
     assert "open_interest_value" in result
@@ -81,9 +86,9 @@ def test_fetch_open_interest(mock_client_class, mock_binance_client):
     assert "trend" in result
     assert "interpretation" in result
     
-    # Verify values based on our sample data
+    # Verify values based on our mocked return data
     assert result["open_interest_value"] == 100000.0
-    assert result["open_interest_change_24h"] < 0  # Should show a decrease based on our sample data
+    assert result["open_interest_change_24h"] < 0  # Should show a decrease based on our mocked data
 
 def test_analyze_open_interest():
     """Test analyzing raw open interest data"""
@@ -186,4 +191,39 @@ def test_fetch_open_interest_api_error(mock_client_class):
     assert "error" in result
     assert result["trend"] == "neutral"
     assert result["open_interest_value"] == 0
-    assert "Could not fetch" in result["interpretation"] 
+    assert "Could not fetch" in result["interpretation"]
+
+def test_breakout_strategy_content():
+    """Test that the breakout strategy content is correctly included in the educational section"""
+    result = analyze_open_interest()
+    
+    # Verify basic structure
+    assert isinstance(result, dict)
+    assert "educational" in result
+    assert "breakout_strategy" in result["educational"]
+    
+    # Get the breakout strategy section
+    breakout_strategy = result["educational"]["breakout_strategy"]
+    
+    # Verify all required fields exist
+    assert "description" in breakout_strategy
+    assert "when_to_use" in breakout_strategy
+    assert "support_resistance_identification" in breakout_strategy
+    assert "long_entry_guidelines" in breakout_strategy
+    assert "short_entry_guidelines" in breakout_strategy
+    assert "volume_confirmation" in breakout_strategy
+    assert "risk_management" in breakout_strategy
+    
+    # Verify the content of key fields
+    assert isinstance(breakout_strategy["support_resistance_identification"], list)
+    assert len(breakout_strategy["support_resistance_identification"]) > 0
+    
+    # Verify long entry guidelines structure
+    assert "entry_placement" in breakout_strategy["long_entry_guidelines"]
+    assert "stop_loss" in breakout_strategy["long_entry_guidelines"]
+    assert "target" in breakout_strategy["long_entry_guidelines"]
+    
+    # Verify short entry guidelines structure
+    assert "entry_placement" in breakout_strategy["short_entry_guidelines"]
+    assert "stop_loss" in breakout_strategy["short_entry_guidelines"]
+    assert "target" in breakout_strategy["short_entry_guidelines"] 

@@ -7,5 +7,23 @@
       "trend": "neutral",
       "interpretation": "Open interest has changed by -1.96% in the last 24 hours. This relatively stable open interest suggests a balance between new positions and positions being closed."
     }
+  },
+  "BTC-USDT-SWAP": {
+    "cache_timestamp": 1746757645.2962282,
+    "data": {
+      "open_interest_value": 2403200.540000005,
+      "open_interest_change_24h": 0,
+      "trend": "neutral",
+      "interpretation": "Open interest data available, but no trend analysis could be performed."
+    }
+  },
+  "ETH-USDT-SWAP": {
+    "cache_timestamp": 1746757656.819314,
+    "data": {
+      "open_interest_value": 5694628.010000003,
+      "open_interest_change_24h": 0,
+      "trend": "neutral",
+      "interpretation": "Open interest data available, but no trend analysis could be performed."
+    }
   }
 }

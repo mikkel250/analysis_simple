@@ -23,7 +23,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.markdown import Markdown
 
-from src.jupyter.market_analyzer import MarketAnalyzer
+from src.analysis.market_analyzer import MarketAnalyzer
 from src.services import indicators
 from src.cli.education import get_indicator_explanation, category_header, get_period_return_explanation, get_volatility_explanation
 from src.cli.display import (
@@ -1007,26 +1007,35 @@ def display_market_analysis(analyzer: MarketAnalyzer, output_format: str = None,
 
 def print_market_analysis(summary, symbol, timeframe, explain: bool = False, analyzer=None):
     """
-    Print market analysis in text format, including advanced analytics at the top after the header.
+    Print market analysis in a formatted way.
+
     Args:
-        summary: Analysis summary dict
-        symbol: Market symbol
-        timeframe: Trading timeframe
-        explain: Whether to include educational explanations
-        analyzer: MarketAnalyzer instance (optional, for advanced analytics)
+        summary: Dictionary with market analysis data
+        symbol: The trading symbol being analyzed
+        timeframe: The timeframe of the analysis
+        explain: Whether to include additional explanations
+        analyzer: Optional MarketAnalyzer instance for advanced analytics
     """
     # Direct hardcoded formatting based on the timeframe string
-    formatted_timeframe = timeframe.upper()
-    if timeframe.lower() == "short":
-        formatted_timeframe = "SHORT - 15m"
-    elif timeframe.lower() == "medium":
-        formatted_timeframe = "MEDIUM - 1h"
-    elif timeframe.lower() == "long":
-        formatted_timeframe = "LONG - 1d"
-
+    if timeframe == "short":
+        timeframe_display = "SHORT - 15m"
+    elif timeframe == "medium":
+        timeframe_display = "MEDIUM - 4h"
+    elif timeframe == "long":
+        timeframe_display = "LONG - 1d"
+    else:
+        timeframe_display = timeframe.upper()
+    
     print("\n" + "=" * 50)
-    print(f"MARKET ANALYSIS: {symbol} ({formatted_timeframe})")
+    print(f"MARKET ANALYSIS: {symbol} ({timeframe_display})")
     print("=" * 50)
+    
+    # Helper function to clean text fields that may contain line breaks
+    def _clean_text(text):
+        if not text:
+            return "-"
+        # Replace line breaks with spaces and remove extra spaces
+        return " ".join(text.replace("\n", " ").split())
 
     # --- ADVANCED ANALYTICS SECTION ---
     if analyzer is not None and hasattr(analyzer, "get_advanced_analytics"):
@@ -1082,86 +1091,138 @@ def print_market_analysis(summary, symbol, timeframe, explain: bool = False, ana
             print(f"    • Strategy: {s.replace('_', ' ').capitalize()}")
             print(f"    • Rationale: {rationale}")
             print(f"    • Advice: {advice}")
-        # WHAT TO WATCH FOR section
+        
+        # Breakout Strategy Analysis
+        breakout = adv.get("breakout_strategy", {})
+        if breakout and isinstance(breakout, dict) and breakout.get("status") == "success":
+            print("\nBREAKOUT STRATEGY ANALYSIS:")
+            
+            # Market condition information
+            market_condition = breakout.get("market_condition", "Unknown")
+            consolidation_strength = breakout.get("consolidation_strength", "Low")
+            
+            print(f"  Market Condition: {market_condition.replace('_', ' ').capitalize()} (Strength: {consolidation_strength.capitalize()})")
+            print()
+            
+            # Long breakout strategy
+            long_breakout = breakout.get("long_breakout")
+            if long_breakout:
+                print("  Long Breakout:")
+                print(f"    • Entry Point: {long_breakout['entry']:.2f} ({long_breakout['entry_distance']:.2f}% above current price)")
+                print(f"    • Stop Loss: {long_breakout['stop']:.2f} ({long_breakout['stop_distance']:.2f}% below entry)")
+                
+                # Print targets
+                for i, target in enumerate(long_breakout.get('targets', []), 1):
+                    print(f"    • Target {i}: {target['price']:.2f} (R/R: {target['r_r']:.1f})")
+                
+                print(f"    • Confidence: {long_breakout['confidence'].capitalize()}")
+                print()
+            
+            # Short breakout strategy
+            short_breakout = breakout.get("short_breakout")
+            if short_breakout:
+                print("  Short Breakout:")
+                print(f"    • Entry Point: {short_breakout['entry']:.2f} ({short_breakout['entry_distance']:.2f}% below current price)")
+                print(f"    • Stop Loss: {short_breakout['stop']:.2f} ({short_breakout['stop_distance']:.2f}% above entry)")
+                
+                # Print targets
+                for i, target in enumerate(short_breakout.get('targets', []), 1):
+                    print(f"    • Target {i}: {target['price']:.2f} (R/R: {target['r_r']:.1f})")
+                
+                print(f"    • Confidence: {short_breakout['confidence'].capitalize()}")
+                print()
+            
+            # What to watch for
+            if breakout.get("momentum", {}).get("adx", 0) < 25:
+                print("\nWHAT TO WATCH FOR:")
+                print(f"  - Watch for ADX to rise above 25 (currently {breakout['momentum'].get('adx', 0):.1f}).")
+        
+        # Watch for signals
         watch_for_signals = adv.get("watch_for_signals", [])
-        if watch_for_signals and isinstance(watch_for_signals, list):
+        if watch_for_signals and isinstance(watch_for_signals, list) and len(watch_for_signals) > 0:
             print("\nWHAT TO WATCH FOR:")
             for signal in watch_for_signals:
-                # Clean up signal text to remove line breaks
-                signal = _clean_text(signal)
-                print(f"  - {signal}")
-        # --- OPEN INTEREST ANALYTICS ---
+                if signal:
+                    print(f"  - {signal}")
+                    
+        # Open Interest Analysis
         oi = adv.get("open_interest_analysis", {})
         if oi and isinstance(oi, dict):
             print("\nOPEN INTEREST ANALYTICS:")
             
-            # Check if this is educational content (new format)
-            if oi.get("regime") == "educational":
-                print(f"  » COINGLASS REFERENCE GUIDE «")
-                print(f"  Check CoinGlass for actual open interest data and use this guide to interpret it.")
+            # Check if we have enhanced analysis fields
+            trading_signals = oi.get("trading_signals", {})
+            metrics = oi.get("metrics", {})
+            divergence = oi.get("divergence", {})
+            
+            # Handle different possible format fields in the mock data
+            # First, check if this is mock data (it will have is_mock flag)
+            is_mock = oi.get("is_mock", False)
+            
+            # If trading_signals and metrics exist (either real or properly formatted mock)
+            if ((trading_signals and metrics and isinstance(trading_signals, dict) and isinstance(metrics, dict)) or
+                (is_mock and oi.get("value", 0) > 0)):
+                signal = trading_signals.get("signal", "neutral")
+                action = trading_signals.get("action", "wait")
+                formatted_signal = signal.replace("_", " ").capitalize()
+                formatted_action = action.upper()
                 
-                # Display what is open interest
-                what_is_oi = oi.get("educational", {}).get("what_is_oi", "")
-                if what_is_oi:
-                    print(f"\n  What is Open Interest?")
-                    # Clean up text to remove line breaks
-                    what_is_oi = _clean_text(what_is_oi)
-                    print(f"  {what_is_oi}")
+                # Display main OI trading signal
+                print(f"  Trading Signal: {formatted_signal} (Action: {formatted_action})")
                 
-                # Display interpretation patterns
-                interpret_patterns = oi.get("educational", {}).get("how_to_interpret", [])
-                if interpret_patterns:
-                    print(f"\n  How to Interpret Open Interest:")
-                    for pattern in interpret_patterns:
-                        pattern_name = pattern.get("pattern", "")
-                        interpretation = pattern.get("interpretation", "")
-                        action = pattern.get("action", "")
-                        
-                        # Clean up text to remove line breaks
-                        pattern_name = _clean_text(pattern_name)
-                        interpretation = _clean_text(interpretation)
-                        action = _clean_text(action)
-                        
-                        # Format with descriptive text instead of colors
-                        print(f"  • {pattern_name}")
-                        print(f"    {interpretation}")
-                        print(f"    Action: {action}")
-                        print("")
+                # Display key metrics
+                # The mock data might have values in different fields so check multiple locations
+                oi_value = metrics.get("open_interest", oi.get("value", oi.get("open_interest_value", 0)))
+                oi_change_24h = metrics.get("oi_change_24h", oi.get("change_24h", oi.get("open_interest_change_24h", 0)))
+                oi_volume_ratio = metrics.get("oi_volume_ratio", 0)
                 
-                # Display warning signs - these are particularly relevant to current analysis
-                warning_signs = oi.get("educational", {}).get("warning_signs", [])
-                if warning_signs:
-                    print(f"\n  Warning Signs to Watch For:")
-                    for sign in warning_signs:
-                        # Clean up sign text to remove line breaks
-                        sign = _clean_text(sign)
-                        print(f"  • {sign}")
+                print(f"  Current Value: {oi_value:,.0f}")
+                change_sign = "+" if oi_change_24h > 0 else ""
+                print(f"  24h Change: {change_sign}{oi_change_24h:.2f}%")
+                print(f"  OI/Volume Ratio: {oi_volume_ratio:.4f}")
                 
-                # How to use CoinGlass
-                coinglass_tips = oi.get("educational", {}).get("how_to_use_coinglass", [])
-                if coinglass_tips:
-                    print(f"\n  How to Use CoinGlass:")
-                    for tip in coinglass_tips:
-                        # Clean up tip text to remove line breaks
-                        tip = _clean_text(tip)
-                        print(f"  • {tip}")
+                # Display divergence information if detected
+                if divergence.get("detected", False):
+                    div_type = divergence.get("type", "")
+                    div_strength = divergence.get("strength", 0)
+                    print(f"  Divergence: {div_type.replace('_', ' ').capitalize()} (Strength: {div_strength:.1f})")
                 
-                # Display relevant metrics to check based on current market condition
-                print(f"\n  Most Relevant to Current Market Condition:")
+                # Show specific recommendations based on current market analysis
+                print("\n  Recommendations:")
                 
                 # Check if we can determine current trend from the broader analysis
                 adv_rec = adv.get("recommendation", {})
-                if adv_rec:
-                    market_condition = adv_rec.get("market_condition", "")
-                    if "uptrend" in market_condition.lower():
-                        print(f"  • Focus on Rising OI + Rising Price pattern to confirm trend strength")
-                        print(f"  • Watch for OI Divergence (price making new highs without OI confirmation)")
-                    elif "downtrend" in market_condition.lower():
-                        print(f"  • Focus on Rising OI + Falling Price pattern to confirm trend strength")
-                        print(f"  • Watch for OI by Collateral Type to gauge smart money conviction")
+                market_condition = adv_rec.get("market_condition", "").lower() if adv_rec else ""
+                
+                # Get the OI trend from metrics or the trend field
+                oi_trend = trend_options = trend = metrics.get("oi_momentum", {}).get("long_term", 
+                    oi.get("trend", "neutral"))
+                
+                # Show recommendations based on trend
+                if "bullish" in oi_trend:
+                    print(f"  • Rising OI suggests new money entering the market")
+                    print(f"  • Bullish signal strongest when price and OI rise together")
+                    if "uptrend" in market_condition or "bullish" in market_condition:
+                        print(f"  • Current trend confirmed by rising open interest")
                     else:
-                        print(f"  • Focus on OI by Exchange to detect potential market movers")
-                        print(f"  • Watch for Large OI Spikes which may precede a new trend direction")
+                        print(f"  • Watch for price confirmation of this bullish OI signal")
+                elif "bearish" in oi_trend:
+                    print(f"  • Declining OI suggests positions are being closed")
+                    print(f"  • Check if price is also falling (bearish) or rising (short squeeze)")
+                    if "downtrend" in market_condition or "bearish" in market_condition:
+                        print(f"  • Current downtrend confirmed by falling open interest")
+                    else:
+                        print(f"  • Monitor for potential trend change or consolidation phase")
+                else:
+                    print(f"  • Stable OI suggests a balance between opening and closing positions")
+                    print(f"  • Watch for breakout volume accompanied by rising OI")
+                    print(f"  • Current consolidation may precede a significant move")
+                
+                # Add divergence recommendations if detected
+                if divergence.get("detected", False):
+                    div_type = divergence.get("type", "").replace("_", " ").capitalize()
+                    print(f"  • {div_type} detected - this may signal a potential reversal")
+                    print(f"  • Prioritize risk management in current positions")
             else:
                 # Original open interest display code (for backward compatibility)
                 regime = oi.get("regime", "-")

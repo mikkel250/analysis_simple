@@ -24,7 +24,6 @@ from src.cli.commands import (
     analysis_app,
     status_app,
     clean_app,
-    jupyter_app,
     analyzer_app,
     config_app
 )
@@ -38,7 +37,6 @@ app.add_typer(price_app, name="price")
 app.add_typer(analysis_app, name="analysis")
 app.add_typer(status_app, name="status")
 app.add_typer(clean_app, name="clean")
-app.add_typer(jupyter_app, name="jupyter")
 app.add_typer(analyzer_app, name="analyzer")
 app.add_typer(config_app, name="config")
 

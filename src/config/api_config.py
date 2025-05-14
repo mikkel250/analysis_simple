@@ -28,7 +28,8 @@ SUPPORTED_EXCHANGES = [
     "coinbase",
     "kraken",
     "kucoin",
-    "ftx"
+    "ftx",
+    "okx"
 ]
 
 # Ensure config directory exists
@@ -49,6 +50,24 @@ def load_from_env(exchange: str = DEFAULT_EXCHANGE) -> Dict[str, str]:
     if dotenv_path.exists():
         dotenv.load_dotenv(dotenv_path)
     
+    # Special handling for OKX which uses a different variable format
+    if exchange.lower() == "okx":
+        api_key = os.environ.get("apikey")
+        api_secret = os.environ.get("secretkey")
+        if api_key and api_secret:
+            # Strip quotes if present (e.g. apikey='key' -> key)
+            if api_key.startswith("'") and api_key.endswith("'"):
+                api_key = api_key[1:-1]
+            if api_secret.startswith("'") and api_secret.endswith("'"):
+                api_secret = api_secret[1:-1]
+                
+            logger.info(f"Found OKX API credentials in environment variables")
+            return {
+                "api_key": api_key,
+                "api_secret": api_secret
+            }
+    
+    # Standard format for other exchanges
     exchange = exchange.upper()
     api_key = os.environ.get(f"{exchange}_API_KEY")
     api_secret = os.environ.get(f"{exchange}_API_SECRET")

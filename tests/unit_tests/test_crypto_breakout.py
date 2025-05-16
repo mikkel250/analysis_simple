@@ -28,7 +28,9 @@ def sample_data():
         'low': [p - 50 for p in prices],
         'close': prices,
         'volume': [1000000] * 30,
-        'ATR_14': [100] * 30  # Fixed ATR for predictable tests
+        'ATR_14': [100.0] * 30,  # Fixed ATR for predictable tests
+        'rsi_14': [50.0] * 30, # Added for _get_momentum_from_df
+        'MACDh_12_26_9': [0.5] * 30 # Added for _get_momentum_from_df
     })
     
     return data.set_index('date')
@@ -94,7 +96,8 @@ def test_position_size_calculation(sample_data):
     atr = sample_data['ATR_14'].iloc[-1]
     
     # Calculate momentum
-    momentum = strategy._calculate_momentum(sample_data)
+    momentum = strategy._get_momentum_from_df(sample_data)
+    assert momentum is not None
     
     # Test with a distant entry (should increase size)
     far_entry = current_price * 1.1  # 10% away
@@ -150,13 +153,13 @@ def test_atr_calculation(sample_data):
     strategy = CryptoBreakoutStrategy()
     
     # Test with ATR column present
-    atr_from_column = strategy._get_atr(sample_data)
+    atr_from_column = strategy._get_atr_from_df(sample_data)
     assert atr_from_column == 100  # Should match our fixed ATR value
     
     # Test with ATR column removed
     data_no_atr = sample_data.drop('ATR_14', axis=1)
-    atr_calculated = strategy._get_atr(data_no_atr)
-    assert atr_calculated > 0  # Should calculate a positive ATR value
+    atr_calculated_none = strategy._get_atr_from_df(data_no_atr)
+    assert atr_calculated_none is None  # Should be None as ATR_14 is missing
 
 def test_error_handling():
     """Test error handling for invalid inputs."""
@@ -189,9 +192,6 @@ def test_high_leverage_calculation(sample_data):
         base_leverage=10.0,
         max_leverage=30.0
     )
-    
-    # Calculate momentum
-    momentum = strategy._calculate_momentum(sample_data)
     
     # Test with strong momentum setup
     strong_momentum = {
@@ -236,7 +236,7 @@ def test_dynamic_stop_losses(sample_data):
     strategy = CryptoBreakoutStrategy()
     
     # Calculate momentum
-    momentum = strategy._calculate_momentum(sample_data)
+    momentum = strategy._get_momentum_from_df(sample_data)
     
     # Test long position stops
     long_stops = strategy._calculate_dynamic_stops(

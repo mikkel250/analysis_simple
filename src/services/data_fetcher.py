@@ -13,6 +13,9 @@ from typing import Dict, List, Optional, Tuple, Union, Any
 import pandas as pd
 from pycoingecko import CoinGeckoAPI
 
+# Import config loader
+from src.config.api_config import get_api_credentials
+
 # Import cache_service for caching price data
 from .cache_service import (
     store_dataframe,
@@ -23,6 +26,10 @@ from .cache_service import (
     DEFAULT_TTL
 )
 
+# Need to add logger to data_fetcher.py if not already present for the log messages above
+# (Assuming logger is already configured or will be added if missing)
+import logging
+logger = logging.getLogger(__name__)
 
 class DataFetcher:
     """
@@ -31,7 +38,16 @@ class DataFetcher:
     
     def __init__(self):
         """Initialize the DataFetcher with CoinGecko API client."""
-        self.cg = CoinGeckoAPI()
+        cg_credentials = get_api_credentials("coingecko")
+        cg_api_key = cg_credentials.get("api_key") if cg_credentials else None
+        
+        if cg_api_key:
+            self.cg = CoinGeckoAPI(api_key=cg_api_key)
+            logger.info("CoinGeckoAPI initialized with API key.")
+        else:
+            self.cg = CoinGeckoAPI()
+            logger.info("CoinGeckoAPI initialized without API key (public access).")
+        
         # Set rate limit sleep time (in seconds) to avoid hitting API limits
         self.rate_limit_sleep = 1.5
         

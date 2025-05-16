@@ -18,6 +18,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import yfinance as yf
+from src.plotting.charts import plot_technical_analysis
+from src.analysis.market_analyzer import MarketAnalyzer
+import logging
+
+logger = logging.getLogger(__name__)
 
 # Global state to store current trading style settings
 # This will be accessed by other functions in the kernel
@@ -235,14 +240,19 @@ def plot_for_current_style(
     Returns:
         Plotly figure
     """
-    from src.analysis.market_data import plot_technical_analysis
-    
-    # Create a title if none provided
-    if title is None:
-        style_name = TRADING_STYLE['name'].capitalize()
-        title = f"{style_name} Timeframe Analysis ({data['symbol'].iloc[0]})"
-    
-    # Create the plot
+    if data is None or data.empty:
+        logger.warning(f"No data available for {data['symbol'].iloc[0]} to plot analysis.")
+        return None
     fig = plot_technical_analysis(data, title=title)
-    
     return fig
+
+def analyze_pair_trading_strategy(symbol1_data: pd.DataFrame, 
+    symbol2_data: pd.DataFrame, 
+    spread: float, 
+    threshold: float, 
+    timeframe: str = '1d'
+) -> Optional[str]:
+    # Implementation of analyze_pair_trading_strategy function
+    # This function should return a string describing the result of the analysis
+    # or None if no conclusion can be drawn
+    pass

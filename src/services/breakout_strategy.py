@@ -54,12 +54,18 @@ class CryptoBreakoutStrategy:
             }
         
         try:
-            # Get current price and ATR
+            # Get current price
             current_price = data['close'].iloc[-1]
-            atr = self._get_atr(data)
-            
-            # Calculate momentum indicators for leverage adjustment
-            momentum = self._calculate_momentum(data)
+
+            # Get ATR, RSI, MACD from pre-calculated columns in the DataFrame
+            atr = self._get_atr_from_df(data)
+            momentum_indicators = self._get_momentum_from_df(data)
+
+            if atr is None or momentum_indicators is None:
+                return {
+                    'status': 'error',
+                    'message': 'Required indicators (ATR, RSI, MACD) not found or invalid in input data'
+                }
             
             # Detect support and resistance levels
             levels = detect_support_resistance(data)
@@ -91,14 +97,14 @@ class CryptoBreakoutStrategy:
                 entry=long_entry,
                 atr=atr,
                 direction='long',
-                momentum=momentum
+                momentum=momentum_indicators
             )
             short_position = self._calculate_position_size(
                 current_price=current_price,
                 entry=short_entry,
                 atr=atr,
                 direction='short',
-                momentum=momentum
+                momentum=momentum_indicators
             )
             
             # Calculate dynamic stop losses
@@ -106,14 +112,14 @@ class CryptoBreakoutStrategy:
                 entry=long_entry,
                 atr=atr,
                 direction='long',
-                momentum=momentum,
+                momentum=momentum_indicators,
                 leverage=long_position['leverage']
             )
             short_stops = self._calculate_dynamic_stops(
                 entry=short_entry,
                 atr=atr,
                 direction='short',
-                momentum=momentum,
+                momentum=momentum_indicators,
                 leverage=short_position['leverage']
             )
             
@@ -139,7 +145,7 @@ class CryptoBreakoutStrategy:
                 'status': 'success',
                 'current_price': current_price,
                 'atr': atr,
-                'momentum': momentum,
+                'momentum': momentum_indicators,
                 'market_condition': 'consolidation' if is_consolidating else 'non_consolidation',
                 'consolidation_strength': consolidation_strength,
                 'supports': levels['supports'],
@@ -181,30 +187,50 @@ class CryptoBreakoutStrategy:
             }
             
         except Exception as e:
-            logger.error(f"Error in breakout calculation: {e}")
+            logger.error(f"Error in breakout calculation: {e}", exc_info=True)
             return {
                 'status': 'error',
                 'message': str(e)
             }
     
-    def _get_atr(self, data: pd.DataFrame) -> float:
-        """Calculate or get ATR value."""
-        if 'ATR_14' in data.columns:
+    def _get_atr_from_df(self, data: pd.DataFrame) -> Optional[float]:
+        """Get ATR value from DataFrame column 'ATR_14'."""
+        if 'ATR_14' in data.columns and not pd.isna(data['ATR_14'].iloc[-1]):
             return data['ATR_14'].iloc[-1]
+        logger.warning("ATR_14 not found or is NaN in DataFrame for breakout strategy.")
+        return None
+
+    def _get_momentum_from_df(self, data: pd.DataFrame) -> Optional[Dict[str, float]]:
+        """Get RSI and MACD histogram from DataFrame columns."""
+        rsi_col = 'rsi_14' # Assuming this is the standard column name from add_technical_indicators
+        macd_hist_col = 'MACDh_12_26_9' # Assuming this is the standard column name
+        volume_col = 'volume' # Standard volume column name
+
+        if not all(col in data.columns for col in [rsi_col, macd_hist_col, volume_col, 'close']):
+            logger.warning("Required columns for momentum (RSI, MACD Histogram, Volume, Close) not in DataFrame.")
+            return None
+
+        rsi = data[rsi_col].iloc[-1]
+        macd_hist = data[macd_hist_col].iloc[-1]
         
-        # Calculate ATR if not available
-        high = data['high']
-        low = data['low']
-        close = data['close']
-        
-        tr1 = high - low
-        tr2 = abs(high - close.shift(1))
-        tr3 = abs(low - close.shift(1))
-        
-        tr = pd.DataFrame({'tr1': tr1, 'tr2': tr2, 'tr3': tr3}).max(axis=1)
-        atr = tr.rolling(14).mean().iloc[-1]
-        
-        return atr
+        if pd.isna(rsi) or pd.isna(macd_hist):
+            logger.warning("RSI or MACD Histogram is NaN in DataFrame for breakout strategy.")
+            return None
+
+        # Volume trend (simplified, as original calculation was complex and local)
+        # This part can be enhanced if a more sophisticated volume trend is needed from pre-calculated indicators
+        volume_series = data[volume_col].rolling(window=20).mean()
+        vol_change = 0.0
+        if len(volume_series) >= 5 and not pd.isna(volume_series.iloc[-1]) and not pd.isna(volume_series.iloc[-5]) and volume_series.iloc[-5] != 0:
+            vol_change = (volume_series.iloc[-1] / volume_series.iloc[-5] - 1) * 100
+        else:
+            logger.debug("Not enough data or NaN in volume series for vol_change calculation in breakout strategy.")
+
+        return {
+            'rsi': rsi,
+            'macd_hist': macd_hist,
+            'volume_trend': vol_change
+        }
     
     def _calculate_profit_targets(self, entry: float, atr: float, direction: str) -> List[Dict[str, float]]:
         """
@@ -240,33 +266,6 @@ class CryptoBreakoutStrategy:
             })
         
         return targets
-    
-    def _calculate_momentum(self, data: pd.DataFrame) -> Dict[str, float]:
-        """Calculate momentum indicators for leverage adjustment."""
-        # RSI for overall momentum
-        close = data['close']
-        delta = close.diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=14).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=14).mean()
-        rs = gain / loss
-        rsi = 100 - (100 / (1 + rs))
-        
-        # MACD for trend strength
-        exp1 = close.ewm(span=12, adjust=False).mean()
-        exp2 = close.ewm(span=26, adjust=False).mean()
-        macd = exp1 - exp2
-        signal = macd.ewm(span=9, adjust=False).mean()
-        macd_hist = macd - signal
-        
-        # Volume trend
-        volume = data['volume'].rolling(window=20).mean()
-        vol_change = (volume.iloc[-1] / volume.iloc[-5] - 1) * 100
-        
-        return {
-            'rsi': rsi.iloc[-1],
-            'macd_hist': macd_hist.iloc[-1],
-            'volume_trend': vol_change
-        }
     
     def _calculate_position_size(
         self,

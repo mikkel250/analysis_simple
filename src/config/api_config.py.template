@@ -1,0 +1,29 @@
+{
+  "binance": {
+    "api_key": "YOUR_BINANCE_API_KEY",
+    "api_secret": "YOUR_BINANCE_API_SECRET"
+  },
+  "bybit": {
+    "api_key": "YOUR_BYBIT_API_KEY",
+    "api_secret": "YOUR_BYBIT_API_SECRET"
+  },
+  "coinbase": {
+    "api_key": "YOUR_COINBASE_API_KEY",
+    "api_secret": "YOUR_COINBASE_API_SECRET"
+  },
+  "kraken": {
+    "api_key": "YOUR_KRAKEN_API_KEY",
+    "api_secret": "YOUR_KRAKEN_API_SECRET"
+  },
+  "kucoin": {
+    "api_key": "YOUR_KUCOIN_API_KEY",
+    "api_secret": "YOUR_KUCOIN_API_SECRET"
+  },
+  "okx": {
+    "api_key": "YOUR_OKX_API_KEY (or use apikey for env vars)",
+    "api_secret": "YOUR_OKX_API_SECRET (or use secretkey for env vars)"
+  },
+  "coingecko": {
+    "api_key": "YOUR_COINGECKO_PRO_API_KEY (optional)"
+  }
+} 

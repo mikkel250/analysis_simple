@@ -29,7 +29,8 @@ SUPPORTED_EXCHANGES = [
     "kraken",
     "kucoin",
     "ftx",
-    "okx"
+    "okx",
+    "coingecko"
 ]
 
 # Ensure config directory exists
@@ -68,18 +69,20 @@ def load_from_env(exchange: str = DEFAULT_EXCHANGE) -> Dict[str, str]:
             }
     
     # Standard format for other exchanges
-    exchange = exchange.upper()
-    api_key = os.environ.get(f"{exchange}_API_KEY")
-    api_secret = os.environ.get(f"{exchange}_API_SECRET")
+    exchange_upper = exchange.upper()
+    api_key = os.environ.get(f"{exchange_upper}_API_KEY")
+    api_secret = None
+    if exchange.lower() != "coingecko":
+        api_secret = os.environ.get(f"{exchange_upper}_API_SECRET")
     
-    if not api_key or not api_secret:
+    if not api_key or (exchange.lower() != "coingecko" and not api_secret):
         logger.warning(f"Missing API credentials for {exchange} in environment variables")
         return {}
-        
-    return {
-        "api_key": api_key,
-        "api_secret": api_secret
-    }
+    
+    creds = {"api_key": api_key}
+    if api_secret:
+        creds["api_secret"] = api_secret
+    return creds
 
 def load_from_file(exchange: str = DEFAULT_EXCHANGE) -> Dict[str, str]:
     """
@@ -100,6 +103,8 @@ def load_from_file(exchange: str = DEFAULT_EXCHANGE) -> Dict[str, str]:
             config = json.load(f)
             
         if exchange in config:
+            if exchange.lower() == "coingecko" and "api_key" in config[exchange]:
+                return {"api_key": config[exchange]["api_key"]}
             return config[exchange]
         else:
             logger.warning(f"No configuration found for {exchange} in config file")
@@ -164,25 +169,26 @@ def get_api_credentials(exchange: str = DEFAULT_EXCHANGE) -> Dict[str, str]:
         Dict containing API key and secret
     """
     # Normalize exchange name
-    exchange = exchange.lower()
-    if exchange not in SUPPORTED_EXCHANGES:
-        logger.warning(f"Unsupported exchange: {exchange}, falling back to {DEFAULT_EXCHANGE}")
-        exchange = DEFAULT_EXCHANGE
+    exchange_lower = exchange.lower()
+    if exchange_lower not in SUPPORTED_EXCHANGES:
+        logger.warning(f"Unsupported service: {exchange}, falling back to {DEFAULT_EXCHANGE} behavior or attempting generic load.")
+        if exchange_lower != "coingecko":
+             exchange_lower = DEFAULT_EXCHANGE.lower()
     
     # Try environment variables first
-    credentials = load_from_env(exchange)
-    if credentials:
-        logger.info(f"Using {exchange} API credentials from environment variables")
+    credentials = load_from_env(exchange_lower)
+    if credentials and credentials.get("api_key"):
+        logger.info(f"Using {exchange_lower} API credentials from environment variables")
         return credentials
         
     # Fall back to config file
-    credentials = load_from_file(exchange)
-    if credentials:
-        logger.info(f"Using {exchange} API credentials from config file")
+    credentials = load_from_file(exchange_lower)
+    if credentials and credentials.get("api_key"):
+        logger.info(f"Using {exchange_lower} API credentials from config file")
         return credentials
         
     # No credentials found
-    logger.warning(f"No API credentials found for {exchange}")
+    logger.warning(f"No API credentials found for {exchange_lower}")
     return {}
 
 def validate_credentials(credentials: Dict[str, str]) -> bool:
@@ -230,7 +236,7 @@ def mask_credentials(credentials: Dict[str, str]) -> Dict[str, str]:
         
     masked = {}
     for key, value in credentials.items():
-        if key in ["api_key", "api_secret"] and value:
+        if key in ["api_key", "api_secret"] and isinstance(value, str) and value:
             # Show first 4 and last 4 characters
             if len(value) > 8:
                 masked[key] = value[:4] + "*" * (len(value) - 8) + value[-4:]

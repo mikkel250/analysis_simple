@@ -16,6 +16,11 @@ BINANCE_API_SECRET="your_binance_api_secret_here"
 # Bybit API credentials (if needed)
 BYBIT_API_KEY="your_bybit_api_key_here"
 BYBIT_API_SECRET="your_bybit_api_secret_here"
+
+# CoinGecko API Key (Optional, for higher rate limits)
+# If you have a CoinGecko Pro API key, set it here.
+# The application will use public API if this is not set.
+COINGECKO_API_KEY="your_coingecko_api_key_here"
 ```
 
 The application will automatically load these variables if present.
@@ -50,13 +55,16 @@ Manually create a file at `config/api_keys.json` with the following structure:
   "bybit": {
     "api_key": "your_bybit_api_key_here",
     "api_secret": "your_bybit_api_secret_here"
+  },
+  "coingecko": { // Optional, for higher rate limits with CoinGecko Pro
+    "api_key": "your_coingecko_api_key_here"
   }
 }
 ```
 
-## Supported Exchanges
+## Supported Exchanges & Services
 
-The configuration system currently supports the following exchanges:
+The configuration system currently supports the following exchanges and services:
 
 - Binance
 - Bybit
@@ -64,6 +72,7 @@ The configuration system currently supports the following exchanges:
 - Kraken
 - KuCoin
 - FTX
+- CoinGecko (API Key for Pro)
 
 ## Security Notes
 

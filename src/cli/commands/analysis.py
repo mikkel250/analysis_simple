@@ -633,32 +633,87 @@ def run(
     days: int = typer.Option(100, "--days", "-d", help="Number of days of historical data to fetch"),
     vs_currency: str = typer.Option("usd", "--vs_currency", "-c", help="Currency to calculate prices against"),
     force_refresh: bool = typer.Option(False, "--refresh", "-r", help="Force refresh data from API"),
-    forecast: bool = typer.Option(False, "--forecast", "-f", help="Include forecasting based on historical data"),
     explain: bool = typer.Option(False, "--explain", "-e", help="Include educational explanations for technical indicators"),
+    debug: bool = typer.Option(False, "--debug", "-dbg", help="Enable debug logging for this command")
 ):
     """
-    Generate comprehensive market analysis with multiple indicators.
-    
-    This command now uses the same underlying analysis engine as the 'analyzer analyze' command.
-    With the --explain flag, includes educational content about what each indicator means
-    and how to interpret the values, now displayed directly with each indicator.
+    Perform a comprehensive market analysis for a given symbol and timeframe.
+    Fetches historical data, calculates various technical indicators, and presents a summary.
     """
-    # Import analyzer components
-    from src.cli.commands.analyzer import TimeframeOption, OutputFormat, analyze
-    
-    # Map timeframe to TimeframeOption
-    timeframe_mapping = {
-        "1d": TimeframeOption.SHORT, 
-        "1w": TimeframeOption.MEDIUM,
-        "1M": TimeframeOption.LONG
-    }
-    selected_timeframe = timeframe_mapping.get(timeframe, TimeframeOption.SHORT)
-    
-    # Call the analyzer analyze command
-    return analyze(
-        symbol=symbol,
-        timeframe=selected_timeframe,
-        output=OutputFormat.TEXT,
-        save_charts=False,
-        explain=explain
-    ) 
+    if debug:
+        # Ensure logging is configured to show debug messages for this run
+        # This might need a more sophisticated setup if basicConfig was already called by root logger
+        logging.basicConfig(level=logging.DEBUG, force=True) # force=True if basicConfig might have been called
+        logger.setLevel(logging.DEBUG)
+        logger.debug(f"Debug logging enabled for analysis run: {symbol}")
+
+    current_price_data = None
+    df_historical = None
+
+    try:
+        with display_spinner(f"Fetching current price for {symbol}..."):
+            current_price_data = get_current_price(symbol, vs_currency=vs_currency)
+        
+        with display_spinner(f"Fetching historical data for {symbol} ({days} days, {timeframe} timeframe)..."):
+            df_historical = get_historical_data(
+                symbol=symbol, 
+                vs_currency=vs_currency, 
+                days=days, 
+                timeframe=timeframe,
+                # force_refresh=force_refresh # Pass force_refresh if get_historical_data supports it for caching
+            )
+
+        if df_historical is None or df_historical.empty:
+            display_error(f"No historical data returned for '{symbol}' with parameters: timeframe={timeframe}, days={days}, currency={vs_currency}. Cannot proceed with analysis.")
+            raise typer.Exit(code=1)
+        
+        if current_price_data is None or not current_price_data.get("current_price", {}).get(vs_currency):
+            display_warning(f"Could not fetch current price for '{symbol}'. Analysis may be incomplete or use last historical price.")
+            # Allow to proceed but summary might be affected. generate_analysis should handle this.
+
+    except ValueError as ve: # Catch specific ValueErrors, e.g. from underlying API calls
+        error_msg = str(ve).lower()
+        if "invalid symbol" in error_msg or "not found" in error_msg or "unknown currency" in error_msg:
+            display_error(f"Could not fetch data for '{symbol}' (currency: {vs_currency}). The symbol or currency may be invalid or not supported. Please check your inputs.")
+        else:
+            display_error(f"A data-related error occurred while fetching data for '{symbol}': {ve}")
+        logger.debug(f"Detailed data fetching error for {symbol} (analysis command):", exc_info=True)
+        raise typer.Exit(code=1)
+    except ConnectionError as ce: # Example for network issues if underlying libraries raise it
+        display_error(f"A network connection error occurred while fetching data for '{symbol}': {ce}. Please check your internet connection.")
+        logger.debug(f"Detailed connection error for {symbol} (analysis command):", exc_info=True)
+        raise typer.Exit(code=1)
+    except Exception as e: # General catch-all for data fetching phase
+        display_error(f"An unexpected error occurred while fetching data for '{symbol}': {e}")
+        logger.debug(f"Detailed data fetching error for {symbol} (analysis command):", exc_info=True)
+        raise typer.Exit(code=1)
+
+    # Proceed with analysis if data fetching was successful
+    try:
+        with display_spinner(f"Generating analysis for {symbol}..."):
+            # Ensure current_price_data is at least an empty dict if None, to avoid errors in generate_analysis
+            analysis_results = generate_analysis(
+                df_historical, 
+                current_price_data if current_price_data else {},
+                symbol=symbol, 
+                timeframe=timeframe, 
+                vs_currency=vs_currency
+            )
+        
+        # Display results
+        formatted_output = format_analysis_result(analysis_results, explain=explain)
+        print(formatted_output) # rich print should handle this well
+        
+        if current_price_data and current_price_data.get("last_updated"):
+            display_data_age(current_price_data["last_updated"])
+        else:
+            display_warning("Could not determine data age for current price.")
+
+        display_success(f"Analysis for {symbol} completed.")
+
+    except typer.Exit: # To prevent re-catching if generate_analysis or format_analysis_result calls typer.Exit
+        raise
+    except Exception as e:
+        logger.error(f"Error during analysis generation or display for {symbol}: {e}", exc_info=True)
+        display_error(f"Failed to complete analysis for '{symbol}' after fetching data: {e}")
+        raise typer.Exit(code=1) 

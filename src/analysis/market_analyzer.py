@@ -15,6 +15,8 @@ import plotly.graph_objects as go
 
 from src.analysis import trading_styles
 from src.analysis import market_data
+from src.plotting import charts
+from src.services.data_fetcher import get_historical_data
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -204,9 +206,9 @@ class MarketAnalyzer:
         logger.info(f"Generating visualizations for {self.symbol}")
         
         # Generate charts
-        price_fig = market_data.plot_price_history(self.data)
-        technical_fig = market_data.plot_technical_analysis(self.data)
-        candlestick_fig = market_data.plot_candlestick(self.data)
+        price_fig = charts.plot_price_history(self.data)
+        technical_fig = charts.plot_technical_analysis(self.data)
+        candlestick_fig = charts.plot_candlestick(self.data)
         
         return {
             'price': price_fig,

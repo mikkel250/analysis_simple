@@ -16,7 +16,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import plotly.graph_objects as go
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, call
 
 # Mock pandas_ta to avoid import issues
 import sys
@@ -256,11 +256,13 @@ def test_run_analysis_without_data(mock_get_performance_summary, mock_add_techni
 
 # Test cases for visualization generation
 
-@patch('src.jupyter.kernel.market_data.plot_price_history')
-@patch('src.jupyter.kernel.market_data.plot_technical_analysis')
-@patch('src.jupyter.kernel.market_data.plot_candlestick')
+@patch('src.analysis.market_analyzer.logger')
+@patch('src.analysis.market_data.get_stock_data')
+@patch('src.plotting.charts.plot_price_history')
+@patch('src.plotting.charts.plot_technical_analysis')
+@patch('src.plotting.charts.plot_candlestick')
 def test_generate_visualizations(mock_plot_candlestick, mock_plot_technical, 
-                                mock_plot_price, mock_stock_data):
+                                mock_plot_price, mock_get_stock_data, mock_logger, mock_stock_data):
     """Test generate_visualizations method."""
     from src.jupyter.market_analyzer import MarketAnalyzer
     
@@ -295,12 +297,13 @@ def test_generate_visualizations(mock_plot_candlestick, mock_plot_technical,
     assert figures['candlestick'] is mock_fig3
 
 
-@patch('src.jupyter.market_analyzer.MarketAnalyzer.run_analysis')
-@patch('src.jupyter.kernel.market_data.plot_price_history')
-@patch('src.jupyter.kernel.market_data.plot_technical_analysis')
-@patch('src.jupyter.kernel.market_data.plot_candlestick')
+@patch('src.analysis.market_analyzer.logger')
+@patch('src.analysis.market_data.get_stock_data')
+@patch('src.plotting.charts.plot_price_history')
+@patch('src.plotting.charts.plot_technical_analysis')
+@patch('src.plotting.charts.plot_candlestick')
 def test_generate_visualizations_without_data(mock_plot_candlestick, mock_plot_technical, 
-                                             mock_plot_price, mock_run_analysis, mock_stock_data):
+                                             mock_plot_price, mock_get_stock_data, mock_logger, mock_stock_data):
     """Test generate_visualizations method when analysis hasn't been run yet."""
     from src.jupyter.market_analyzer import MarketAnalyzer
     
@@ -309,7 +312,6 @@ def test_generate_visualizations_without_data(mock_plot_candlestick, mock_plot_t
     analyzer.data = None
     
     # Configure the mocks
-    mock_run_analysis.return_value = {'data': mock_stock_data}
     mock_plot_price.return_value = MagicMock(spec=go.Figure)
     mock_plot_technical.return_value = MagicMock(spec=go.Figure)
     mock_plot_candlestick.return_value = MagicMock(spec=go.Figure)

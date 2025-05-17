@@ -21,106 +21,115 @@ from .analyzer_modules.formatters import display_info, display_success, display_
 logger = logging.getLogger(__name__)
 
 # Create the command app
-analyzer_app = typer.Typer()
+analyzer_app = typer.Typer(
+    name="analyze-market",
+    help="Perform market analysis for a given symbol, including technical indicators, news sentiment, and fundamental data.",
+    add_completion=False,
+    no_args_is_help=True
+)
 console = Console() # Global console for simple messages if needed outside formatters
 
-@analyzer_app.callback()
-def callback():
-    """Market analyzer powered by the MarketAnalyzer class and modular output formatters."""
-    console.print("📊 Market Analyzer: Comprehensive market analysis using multiple timeframes")
+# Callback to dynamically generate help text for timeframe and output format
+@analyzer_app.callback(invoke_without_command=True)
+def main_callback(
+    ctx: typer.Context,
+    timeframe: TimeframeOption = typer.Option(
+        TimeframeOption.MEDIUM.value, 
+        "--timeframe", "-t", 
+        help=f"Trading timeframe. Choices: {[tf.value for tf in TimeframeOption]}",
+        case_sensitive=False
+    ),
+    output: OutputFormat = typer.Option(
+        OutputFormat.TEXT.value, 
+        "--output", "-o", 
+        help=f"Output format. Choices: {[of.value for of in OutputFormat]}",
+        case_sensitive=False
+    )
+):
+    if ctx.invoked_subcommand is None:
+        # Store choices on context for the command to use if no subcommand is called (which is our case)
+        # This is a bit of a workaround as Typer callbacks are usually for pre-command logic
+        # and direct app invocation doesn't pass these context objects directly to the command.
+        # However, our single command `analyze` will pick these up from its own signature.
+        pass
 
-@analyzer_app.command()
+@analyzer_app.command(
+    name="analyze", # Explicitly naming the command, though it's default for single command apps
+    help="Analyze a financial instrument (e.g., stock symbol like AAPL, crypto like BTC-USD)."
+)
 def analyze(
-    symbol: str = typer.Option("BTC-USDT", "--symbol", "-s", help="Symbol to analyze (e.g., BTC-USDT, ETH-USDT)"),
-    timeframe: str = typer.Option(TimeframeOption.SHORT.value, "--timeframe", "-t", 
-                                help=f"Trading timeframe ({', '.join([t.value for t in TimeframeOption])})"),
-    output: str = typer.Option(OutputFormat.TEXT.value, "--output", "-o", 
-                              help=f"Output format ({', '.join([f.value for f in OutputFormat])}). \
-                                    Formats '{OutputFormat.TXT.value}', '{OutputFormat.JSF.value}', and '{OutputFormat.HTML.value}' save to a file."),
-    # save_charts: bool = typer.Option(False, "--save-charts", "-c", 
-    #                                 help="Save visualization charts to files (relevant for HTML output)"),
-    # save_charts is now handled by html_generator and implicitly True for HTML output via formatters
-    explain: bool = typer.Option(False, "--explain", "-e", 
-                                help="Include educational explanations for indicators"),
-    debug: bool = typer.Option(False, "--debug", "-d", 
-                              help="Enable debug logging"),
-    use_test_data: bool = typer.Option(False, "--test-data", "-td", 
-                                     help="Use test data instead of fetching from API"),
+    symbol: str = typer.Argument(..., help="The trading symbol to analyze (e.g., AAPL, BTC-USD)."),
+    timeframe: TimeframeOption = typer.Option(
+        TimeframeOption.MEDIUM.value, 
+        "--timeframe", "-t", 
+        help="Trading timeframe.", # Help text is dynamic via callback, but static here is fine too
+        case_sensitive=False
+    ),
+    output: OutputFormat = typer.Option(
+        OutputFormat.TEXT.value, 
+        "--output", "-o", 
+        help="Output format.", # Dynamic help from callback
+        case_sensitive=False
+    ),
+    explain: bool = typer.Option(False, "--explain", "-e", help="Provide detailed explanations for analysis components."),
+    api_key: str = typer.Option(None, "--api-key", help="API key for premium data services (optional).")
 ):
     """
-    Analyze a market symbol using the specified timeframe and output format.
+    Analyze a financial instrument (e.g., stock symbol like AAPL, crypto like BTC-USD).
+    
+    This command fetches and processes market data, technical indicators, news sentiment (placeholder),
+    and fundamental data (placeholder) to provide a comprehensive analysis.
     """
+    
+    console = Console()
+    # Use the enum objects directly
+    timeframe_val = timeframe.value
+    output_format_enum = output 
+
+    display_info(f"Market analysis for {symbol} ({timeframe_val}) started.")
+
     try:
-        if debug:
-            logging.basicConfig(level=logging.DEBUG)
-            logger.debug("Debug logging enabled")
+        # Initialize MarketAnalyzer
+        # This is where you'd pass the API key if your MarketAnalyzer uses one
+        analyzer = MarketAnalyzer(symbol=symbol, timeframe=timeframe_val)
         
-        console.print(f"⏳ Analyzing {symbol} for {timeframe} timeframe...")
-
-        # Validate and convert TimeframeOption and OutputFormat from string input
-        try:
-            timeframe_enum = TimeframeOption(timeframe.lower())
-        except ValueError:
-            display_error(f"Invalid timeframe: {timeframe}. Valid options are: {', '.join([t.value for t in TimeframeOption])}")
-            raise typer.Exit(code=1)
-
-        try:
-            output_format_enum = OutputFormat(output.lower())
-        except ValueError:
-            display_error(f"Invalid output format: {output}. Valid options are: {', '.join([f.value for f in OutputFormat])}")
-            raise typer.Exit(code=1)
-
-        # Initialize analyzer
-        market_analyzer = MarketAnalyzer(symbol=symbol, timeframe=timeframe_enum.value, use_test_data=use_test_data)
+        # Perform analysis
+        analysis_results = analyzer.analyze() # This should return a dictionary
         
-        # --- Perform Analysis --- 
-        # This structure assumes MarketAnalyzer methods might raise AnalyzerError for data fetching/processing issues.
-        market_analyzer.fetch_data()
-        market_analyzer.calculate_indicators()
-        market_analyzer.run_analysis_pipeline() # This should populate all necessary fields in analysis_summary
-        
-        analysis_results = market_analyzer.get_analysis_summary() # Consolidated results
-        analysis_results['visualizations'] = market_analyzer.get_visualizations() # Add visualizations if any
-        # If get_summary() and present_cases() are still desired as separate items in results:
-        # analysis_results['summary'] = market_analyzer.get_summary()
-        # analysis_results['market_cases'] = market_analyzer.present_cases()
-        # Ensure your MarketAnalyzer class structures its results in a way `display_market_analysis` expects.
-        # The `display_market_analysis` in `formatters.py` expects a single `analysis_results` dict.
+        # Determine if saving to file is implied by output format
+        save_to_file = output_format_enum in [OutputFormat.TXT, OutputFormat.JSF, OutputFormat.HTML]
 
-        # Determine if the output format implies saving to a file
-        save_output_to_file = output_format_enum in [OutputFormat.TXT, OutputFormat.JSF, OutputFormat.HTML]
-
-        display_info(f"Generating output in {output_format_enum.value} format...")
-        if save_output_to_file:
-            display_info("Output will be saved to a file.")
-
-        # Call the main display function from the formatters module
+        # Display results using the new centralized formatter
         display_market_analysis(
             analysis_results=analysis_results,
             symbol=symbol,
-            timeframe_str=timeframe_enum.value, # Pass the string value of the timeframe
+            timeframe_str=timeframe_val,
             output_format_enum=output_format_enum,
             explain=explain,
-            save_to_file=save_output_to_file
+            save_to_file=save_to_file
         )
         
-        display_success(f"Analysis for {symbol} ({timeframe_enum.value}) completed.")
-
-    except AnalyzerError as e:
-        display_error(f"Analysis Error: {e}")
-        logger.error(f"Analyzer error: {e}", exc_info=debug) # Log with traceback if debug is on
+        if save_to_file:
+            # The display_market_analysis function already handles success messages for file saving.
+            pass
+        elif output_format_enum == OutputFormat.TEXT or output_format_enum == OutputFormat.JSON:
+            # For direct console outputs without file saving, a generic success could be here if desired.
+            # However, the output itself is the success indicator.
+            pass 
+            
+    except AnalyzerError as ae:
+        display_error(f"Analyzer error for {symbol}: {ae}")
         raise typer.Exit(code=1)
-    except ConnectionError as e: # Example for specific network errors from services
-        display_error(f"Network Error: Could not connect to data provider. {e}")
-        logger.error(f"Network error: {e}", exc_info=debug)
+    except FileNotFoundError as fe:
+        display_error(f"File operation error: {fe}") # More specific error for file issues
         raise typer.Exit(code=1)
-    except ValueError as e: # Handles issues like invalid data for indicators if not caught by AnalyzerError
-        display_error(f"Data Error: {e}")
-        logger.error(f"Data error: {e}", exc_info=debug)
+    except ConnectionError as ce:
+        display_error(f"Network connection error: {ce}")
         raise typer.Exit(code=1)
     except Exception as e:
-        display_error(f"An unexpected error occurred: {e}")
-        logger.error(f"Unexpected error in market analysis: {e}", exc_info=True) # Always log traceback for unexpected
+        # Catch-all for other unexpected errors during analysis or display
+        logger.error(f"Unexpected error during analysis for {symbol}: {e}", exc_info=True)
+        display_error(f"An unexpected error occurred for {symbol}: {e}")
         raise typer.Exit(code=1)
 
 if __name__ == "__main__":

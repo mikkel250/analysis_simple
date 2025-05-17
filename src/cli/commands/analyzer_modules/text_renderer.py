@@ -1,2 +1,129 @@
-import io # Added missing import
-from rich.console import Console\nfrom rich.panel import Panel\nfrom rich.table import Table\nfrom rich.markdown import Markdown # Added for potential Markdown in explanations\nfrom src.cli.education import get_indicator_explanation, category_header, get_period_return_explanation, get_volatility_explanation\nfrom src.cli.display import format_price # Assuming format_price is a general display utility\n\nconsole = Console()\n\ndef _clean_text(text: str) -> str:\n    \"\"\"\n    Clean text by removing line breaks and extra spaces.\n    \n    Args:\n        text: Text to clean\n        \n    Returns:\n        Cleaned text\n    \"\"\"\n    if not text:\n        return text\n    \n    # Replace any newlines, carriage returns, or other special characters that might cause line breaks\n    text = text.replace(\'\\n\', \' \').replace(\'\\r\', \' \').replace(\'\\t\', \' \').replace(\'\\v\', \' \').replace(\'\\f\', \' \')\n    \n    # Remove multiple spaces\n    return \' \'.join(text.split())\n\ndef format_text_analysis(analysis_results: dict, symbol: str, timeframe: str, explain: bool = False) -> str:\n    \"\"\"\n    Formats the market analysis data into a text string suitable for console output.\n    Uses Rich library features for better formatting.\n    This function captures what would be printed to the console.\n\n    Args:\n        analysis_results (dict): The dictionary containing all analysis data.\n                                 Expected keys include \'summary\', \'indicators\', \'price_action\', etc.\n        symbol (str): The trading symbol (e.g., \'BTC-USD\').\n        timeframe (str): The timeframe of the analysis (e.g., \'1d\').\n        explain (bool): Whether to include educational explanations for indicators.\n\n    Returns:\n        str: A formatted string representing the market analysis.\n    \"\"\"\n    # Use a temporary console to capture output as a string\n    capture_console = Console(file=io.StringIO(), width=console.width) # Use main console width\n\n    summary = analysis_results.get(\'summary\', {})\n    indicators = analysis_results.get(\'indicators\', {})\n    price_action = analysis_results.get(\'price_action\', {})\n    candlestick_patterns = analysis_results.get(\'candlestick_patterns\', [])\n    volume_analysis = analysis_results.get(\'volume_analysis\', {})\n    market_cases = analysis_results.get(\'market_cases\', {})\n\n    capture_console.print(Panel(f\"[bold cyan]Market Analysis for {symbol} ({timeframe.upper()})[/bold cyan]\", title=\"Analysis Report\", expand=False))\n\n    # General Overview\n    if \'general_overview\' in summary and summary[\'general_overview\']:\n        capture_console.print(Panel(summary[\'general_overview\'], title=\"[bold]General Overview[/bold]\", expand=False))\n\n    # Price Action\n    if price_action:\n        price_table = Table(title=\"[bold]Price Action[/bold]\")\n        price_table.add_column(\"Metric\", style=\"dim\")\n        price_table.add_column(\"Value\")\n        for key, value in price_action.items():\n            price_table.add_row(key.replace(\'_\', \' \').title(), str(value))\n        capture_console.print(price_table)\n    \n    # Technical Indicators\n    if indicators:\n        capture_console.print(Panel(\"[bold green]Technical Indicators[/bold green]\", expand=False))\n        for name, data in indicators.items():\n            if isinstance(data, dict):\n                interpretation = data.get(\'interpretation\', \'N/A\')\n                value_display = []\n                if \'value\' in data and data[\'value\'] is not None:\n                    val = data[\'value\']\n                    value_display.append(f\"Value: {val:.4f}\" if isinstance(val, float) else f\"Value: {val}\")\n                if \'values\' in data and isinstance(data[\'values\'], dict):\n                    for k, v_item in data[\'values\'].items():\n                        value_display.append(f\"{k.replace(\'_\',\' \').title()}: {v_item:.2f}\" if isinstance(v_item, float) else f\"{k.replace(\'_\',\' \').title()}: {v_item}\")\n                \n                indicator_text = f\"[bold]{name.upper()}[/bold]: {interpretation}\"\n                if value_display:\n                    indicator_text += f\"\\n  └─ \" + \", \".join(value_display)\n\n                if \'recommendation\' in data and data[\'recommendation\']:\n                    rec_color = \"green\" if data[\'recommendation\'] == \"BUY\" else \"red\" if data[\'recommendation\'] == \"SELL\" else \"yellow\"\n                    indicator_text += f\"\\n  └─ Recommendation: [{rec_color}]{data[\'recommendation\']}[/{rec_color}]\"\n\n                capture_console.print(indicator_text)\n                if explain:\n                    explanation = get_indicator_explanation(name)\n                    if explanation:\n                        capture_console.print(Markdown(f\"> {explanation}\")) # Using Markdown for blockquote style\n                capture_console.print()\n            else:\n                capture_console.print(f\"[bold]{name.upper()}[/bold]: {data}\")\n                if explain:\n                    explanation = get_indicator_explanation(name)\n                    if explanation:\n                        capture_console.print(Markdown(f\"> {explanation}\"))\n                capture_console.print()\n\n    # Candlestick Patterns\n    if candlestick_patterns:\n        capture_console.print(Panel(\"[bold magenta]Candlestick Patterns Detected[/bold magenta]\", expand=False))\n        for p_info in candlestick_patterns:\n            capture_console.print(f\"- {p_info[\'name\']} (Date: {p_info[\'date\']})\")\n        capture_console.print()\n\n    # Volume Analysis\n    if volume_analysis and \'interpretation\' in volume_analysis:\n        capture_console.print(Panel(f\"[bold]Volume Analysis[/bold]: {volume_analysis[\'interpretation\']}\", expand=False))\n        if \'details\' in volume_analysis and isinstance(volume_analysis[\'details\'], dict):\n            vol_details_table = Table(show_header=False)\n            vol_details_table.add_column(\"Metric\", style=\"dim\")\n            vol_details_table.add_column(\"Value\")\n            for k, v_detail in volume_analysis[\'details\'].items():\n                vol_details_table.add_row(k.replace(\'_\',\' \').title(), str(v_detail))\n            capture_console.print(vol_details_table)\n        capture_console.print()\n        \n    # Market Cases\n    if market_cases:\n        capture_console.print(Panel(\"[bold yellow]Market Scenarios & Cases[/bold yellow]\", expand=False))\n        for case_type, case_data in market_cases.items():\n            capture_console.print(f\"[italic]{case_type.replace(\'_\', \' \').title()}:[/italic]\")\n            if isinstance(case_data, dict) and \'summary\' in case_data:\n                capture_console.print(f\"  Summary: {case_data[\'summary\']}\")\n                if \'confidence\' in case_data:\n                    capture_console.print(f\"  Confidence: {case_data[\'confidence\']}\")\n                if \'key_levels\' in case_data and case_data[\'key_levels\']:\n                    capture_console.print(f\"  Key Levels: {case_data[\'key_levels\']}\")\n            else:\n                capture_console.print(f\"  {case_data}\")\n            capture_console.print()\n\n    # Disclaimer\n    capture_console.print(Panel(\n        \"[dim italic]This analysis is for informational purposes only and does not constitute financial advice. \"\n        \"Market conditions can change rapidly. Always do your own research (DYOR) before making any trading decisions.[/dim italic]\", \n        title=\"Disclaimer\", \n        expand=False\n    ))\n\n    return capture_console.file.getvalue() 
+import io
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
+from rich.markdown import Markdown
+from src.cli.education import get_indicator_explanation
+from src.cli.display import format_price # Assuming format_price is a general display utility, may or may not be used directly here
+
+console = Console()
+
+def _clean_text(text: str) -> str:
+    """Clean text by removing line breaks and extra spaces."""
+    if not text:
+        return text
+    text = text.replace('\n', ' ').replace('\r', ' ').replace('\t', ' ').replace('\v', ' ').replace('\f', ' ')
+    return ' '.join(text.split())
+
+def format_text_analysis(analysis_results: dict, symbol: str, timeframe: str, explain: bool = False) -> str:
+    """
+    Formats the market analysis data into a text string suitable for console output.
+    Uses Rich library features for better formatting.
+    This function captures what would be printed to the console.
+
+    Args:
+        analysis_results (dict): The dictionary containing all analysis data.
+                                 Expected keys include 'summary', 'indicators', 'price_action', etc.
+        symbol (str): The trading symbol (e.g., 'BTC-USD').
+        timeframe (str): The timeframe of the analysis (e.g., '1d').
+        explain (bool): Whether to include educational explanations for indicators.
+
+    Returns:
+        str: A formatted string representing the market analysis.
+    """
+    capture_console = Console(file=io.StringIO(), width=console.width)
+
+    summary = analysis_results.get('summary', {})
+    indicators = analysis_results.get('indicators', {})
+    price_action = analysis_results.get('price_action', {})
+    candlestick_patterns = analysis_results.get('candlestick_patterns', [])
+    volume_analysis = analysis_results.get('volume_analysis', {})
+    market_cases = analysis_results.get('market_cases', {})
+
+    capture_console.print(Panel(f"[bold cyan]Market Analysis for {symbol} ({timeframe.upper()})[/bold cyan]", title="Analysis Report", expand=False))
+
+    if 'general_overview' in summary and summary['general_overview']:
+        capture_console.print(Panel(summary['general_overview'], title="[bold]General Overview[/bold]", expand=False))
+
+    if price_action:
+        price_table = Table(title="[bold]Price Action[/bold]")
+        price_table.add_column("Metric", style="dim")
+        price_table.add_column("Value")
+        for key, value in price_action.items():
+            price_table.add_row(key.replace('_', ' ').title(), str(value))
+        capture_console.print(price_table)
+    
+    if indicators:
+        capture_console.print(Panel("[bold green]Technical Indicators[/bold green]", expand=False))
+        for name, data in indicators.items():
+            if isinstance(data, dict):
+                interpretation = data.get('interpretation', 'N/A')
+                value_display = []
+                if 'value' in data and data['value'] is not None:
+                    val = data['value']
+                    value_display.append(f"Value: {val:.4f}" if isinstance(val, float) else f"Value: {val}")
+                if 'values' in data and isinstance(data['values'], dict):
+                    for k, v_item in data['values'].items():
+                        value_display.append(f"{k.replace('_',' ').title()}: {v_item:.2f}" if isinstance(v_item, float) else f"{k.replace('_',' ').title()}: {v_item}")
+                
+                indicator_text = f"[bold]{name.upper()}[/bold]: {interpretation}"
+                if value_display:
+                    indicator_text += f"\n  └─ " + ", ".join(value_display)
+
+                if 'recommendation' in data and data['recommendation']:
+                    rec_color = "green" if data['recommendation'] == "BUY" else "red" if data['recommendation'] == "SELL" else "yellow"
+                    indicator_text += f"\n  └─ Recommendation: [{rec_color}]{data['recommendation']}[/{rec_color}]"
+
+                capture_console.print(indicator_text)
+                if explain:
+                    explanation = get_indicator_explanation(name)
+                    if explanation:
+                        capture_console.print(Markdown(f"> {explanation}"))
+                capture_console.print()
+            else:
+                capture_console.print(f"[bold]{name.upper()}[/bold]: {data}")
+                if explain:
+                    explanation = get_indicator_explanation(name)
+                    if explanation:
+                        capture_console.print(Markdown(f"> {explanation}"))
+                capture_console.print()
+
+    if candlestick_patterns:
+        capture_console.print(Panel("[bold magenta]Candlestick Patterns Detected[/bold magenta]", expand=False))
+        for p_info in candlestick_patterns:
+            capture_console.print(f"- {p_info.get('name', 'Unknown Pattern')} (Date: {p_info.get('date', 'N/A')})")
+        capture_console.print()
+
+    if volume_analysis and 'interpretation' in volume_analysis:
+        capture_console.print(Panel(f"[bold]Volume Analysis[/bold]: {volume_analysis['interpretation']}", expand=False))
+        if 'details' in volume_analysis and isinstance(volume_analysis['details'], dict):
+            vol_details_table = Table(show_header=False)
+            vol_details_table.add_column("Metric", style="dim")
+            vol_details_table.add_column("Value")
+            for k, v_detail in volume_analysis['details'].items():
+                vol_details_table.add_row(k.replace('_',' ').title(), str(v_detail))
+            capture_console.print(vol_details_table)
+        capture_console.print()
+        
+    if market_cases:
+        capture_console.print(Panel("[bold yellow]Market Scenarios & Cases[/bold yellow]", expand=False))
+        for case_type, case_data in market_cases.items():
+            capture_console.print(f"[italic]{case_type.replace('_', ' ').title()}:[/italic]")
+            if isinstance(case_data, dict) and 'summary' in case_data:
+                capture_console.print(f"  Summary: {case_data['summary']}")
+                if 'confidence' in case_data:
+                    capture_console.print(f"  Confidence: {case_data['confidence']}")
+                if 'key_levels' in case_data and case_data['key_levels']:
+                    capture_console.print(f"  Key Levels: {case_data['key_levels']}")
+            else:
+                capture_console.print(f"  {case_data}")
+            capture_console.print()
+
+    capture_console.print(Panel(
+        "[dim italic]This analysis is for informational purposes only and does not constitute financial advice. "
+        "Market conditions can change rapidly. Always do your own research (DYOR) before making any trading decisions.[/dim italic]", 
+        title="Disclaimer", 
+        expand=False
+    ))
+
+    return capture_console.file.getvalue() 

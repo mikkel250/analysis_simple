@@ -19,7 +19,7 @@ import matplotlib.pyplot as plt
 import plotly.graph_objects as go
 import yfinance as yf
 from src.plotting.charts import plot_technical_analysis
-from src.analysis.market_analyzer import MarketAnalyzer
+# from src.analysis.market_analyzer import MarketAnalyzer # Removed to break circular import
 import logging
 
 logger = logging.getLogger(__name__)
@@ -33,6 +33,8 @@ TRADING_STYLE = {
     'window_sizes': [20, 50, 100],
     'description': 'Intra-day swing trading'
 }
+
+SUPPORTED_STYLES = ['short', 'medium', 'long']
 
 # Short timeframe settings
 SHORT_SETTINGS = {
@@ -140,6 +142,29 @@ def _print_trading_style_info(style: Dict[str, Any]) -> None:
 short_style = _create_magic_function(SHORT_SETTINGS)
 medium_style = _create_magic_function(MEDIUM_SETTINGS)
 long_style = _create_magic_function(LONG_SETTINGS)
+
+def get_current_trading_style() -> Dict[str, Any]:
+    """Return the currently active trading style settings."""
+    return TRADING_STYLE
+
+def apply_trading_style(style_name: str, line: str = "") -> None:
+    """
+    Set the trading style by name.
+    
+    Args:
+        style_name: Name of the style ('short', 'medium', 'long').
+        line: Optional command line arguments for the style function.
+    """
+    if style_name == 'short':
+        short_style(line)
+    elif style_name == 'medium':
+        medium_style(line)
+    elif style_name == 'long':
+        long_style(line)
+    else:
+        logger.error(f"Unsupported trading style: {style_name}. Supported: {SUPPORTED_STYLES}")
+        # Optionally raise an error or print a message
+        print(f"Error: Unsupported trading style '{style_name}'. Choose from {SUPPORTED_STYLES}.")
 
 # Utility functions that use the current trading style
 

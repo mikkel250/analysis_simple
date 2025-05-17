@@ -1,22 +1,114 @@
-import json\nimport os\nimport webbrowser\nfrom rich.console import Console\n\nfrom .common import OutputFormat, AnalyzerError\nfrom .json_utils import NumpyEncoder, preprocess_for_json\nfrom .html_generator import generate_html_report #, display_success, display_warning # display_success/warning are in html_generator for now\nfrom .text_renderer import format_text_analysis\nfrom .file_utils import _ensure_output_directory, _generate_output_filename, _strip_ansi_codes\n\n# It might be better to have these display functions in a more central UI/display utility module\n# For now, keeping them here if formatters.py is the main interaction point for these messages.\ndef display_success(message: str):\n    Console().print(f\"[bold green]SUCCESS:[/] {message}\")\n\ndef display_warning(message: str):\n    Console().print(f\"[bold yellow]WARNING:[/] {message}\")\n\ndef display_info(message: str):\n    Console().print(f\"[bold blue]INFO:[/] {message}\")    \n\ndef display_market_analysis(\n    analysis_results: dict,\n    symbol: str,\n    timeframe_str: str,\n    output_format_enum: OutputFormat,\n    explain: bool = False,\n    save_to_file: bool = False, # Explicit flag to indicate saving\n    # output_filename_base: Optional[str] = None # Base name for file, e.g. symbol_timeframe\n    # save_charts: bool = True # This is now a param for generate_html_report\n):\n    \"\"\"\n    Main dispatch function for displaying market analysis in various formats.\n\n    Args:\n        analysis_results: The core analysis data.\n        symbol: Trading symbol.\n        timeframe_str: Timeframe of the analysis.\n        output_format_enum: The desired OutputFormat (enum member).\n        explain: Whether to include educational explanations (passed to renderers).\n        save_to_file: If True, output is saved to a file. Otherwise, printed to console where appropriate.\n    \"\"\"\n    output_content = \"\"\n    output_filename = None\n    output_dir_path = None # Will be set if saving to file\n\n    # Determine output directory if saving\n    if save_to_file:\n        # _ensure_output_directory uses the string value of the enum for subfolder creation\n        output_dir_path = _ensure_output_directory(output_format_enum.value) \n        if not output_dir_path:\n            raise AnalyzerError(f\"Could not create or access output directory for {output_format_enum.value}\")\n    \n    # Generate content based on format\n    if output_format_enum == OutputFormat.JSON or output_format_enum == OutputFormat.JSF:\n        processed_data = preprocess_for_json(analysis_results)\n        output_content = json.dumps(processed_data, indent=2, cls=NumpyEncoder)\n        if save_to_file:\n            output_filename = _generate_output_filename(symbol, timeframe_str, output_format_enum, output_dir_path)\n
-    elif output_format_enum == OutputFormat.HTML:\n        # HTML is always saved to a file as per original logic implied\n        # The generate_html_report now handles saving charts internally based on its own param if needed.\n        if not output_dir_path: # HTML must be saved\n            output_dir_path = _ensure_output_directory(OutputFormat.HTML.value)\n            if not output_dir_path:\n                raise AnalyzerError(\"Could not create or access output directory for HTML\")
+import json
+import os
+import webbrowser
+from rich.console import Console
+
+from .common import OutputFormat, AnalyzerError
+from .json_utils import NumpyEncoder, preprocess_for_json
+from .html_generator import generate_html_report
+from .text_renderer import format_text_analysis
+from .file_utils import _ensure_output_directory, _generate_output_filename, _strip_ansi_codes
+
+# It might be better to have these display functions in a more central UI/display utility module
+# For now, keeping them here if formatters.py is the main interaction point for these messages.
+def display_success(message: str):
+    Console().print(f"[bold green]SUCCESS:[/] {message}")
+
+def display_warning(message: str):
+    Console().print(f"[bold yellow]WARNING:[/] {message}")
+
+def display_info(message: str):
+    Console().print(f"[bold blue]INFO:[/] {message}")
+
+def display_error(message: str):
+    Console().print(f"[bold red]ERROR:[/] {message}")
+
+def display_market_analysis(
+    analysis_results: dict,
+    symbol: str,
+    timeframe_str: str,
+    output_format_enum: OutputFormat,
+    explain: bool = False,
+    save_to_file: bool = False,
+):
+    """
+    Main dispatch function for displaying market analysis in various formats.
+
+    Args:
+        analysis_results: The core analysis data.
+        symbol: Trading symbol.
+        timeframe_str: Timeframe of the analysis.
+        output_format_enum: The desired OutputFormat (enum member).
+        explain: Whether to include educational explanations (passed to renderers).
+        save_to_file: If True, output is saved to a file. Otherwise, printed to console where appropriate.
+    """
+    output_content = ""
+    output_filename = None
+    output_dir_path = None # Will be set if saving to file
+
+    # Determine output directory if saving
+    if save_to_file:
+        # _ensure_output_directory uses the string value of the enum for subfolder creation
+        output_dir_path = _ensure_output_directory(output_format_enum.value) 
+        if not output_dir_path:
+            raise AnalyzerError(f"Could not create or access output directory for {output_format_enum.value}")
+    
+    # Generate content based on format
+    if output_format_enum == OutputFormat.JSON or output_format_enum == OutputFormat.JSF:
+        processed_data = preprocess_for_json(analysis_results)
+        output_content = json.dumps(processed_data, indent=2, cls=NumpyEncoder)
+        if save_to_file:
+            output_filename = _generate_output_filename(symbol, timeframe_str, output_format_enum, output_dir_path)
+
+    elif output_format_enum == OutputFormat.HTML:
+        # HTML is always saved to a file as per original logic implied
+        # The generate_html_report now handles saving charts internally based on its own param if needed.
+        if not output_dir_path: # HTML must be saved
+            output_dir_path = _ensure_output_directory(OutputFormat.HTML.value)
+            if not output_dir_path:
+                raise AnalyzerError("Could not create or access output directory for HTML")
                 
-        output_content = generate_html_report(\n            analysis_results=analysis_results, \n            symbol=symbol, \n            timeframe=timeframe_str, \n            output_dir=output_dir_path, # For saving images by html_generator\n            explain=explain,\n            save_charts=True # Assume charts are saved for HTML by default
-        )\n        # Filename for HTML content itself
-        output_filename = _generate_output_filename(symbol, timeframe_str, OutputFormat.HTML, output_dir_path)\n
-    elif output_format_enum == OutputFormat.TEXT or output_format_enum == OutputFormat.TXT:\n        output_content = format_text_analysis(analysis_results, symbol, timeframe_str, explain)\n        if save_to_file: # TXT implies saving\n            output_filename = _generate_output_filename(symbol, timeframe_str, output_format_enum, output_dir_path)\n            # The text from format_text_analysis is already clean (no ANSI for file)
-            # but if it had Rich markup for console, _strip_ansi_codes would be needed here if not done in text_renderer
-            # current text_renderer returns string from captured console, which might need stripping if console had force_terminal=True
-            # However, Rich typically omits styling if it detects it's not writing to a TTY (like a file buffer)
-            # Forcing stripping just in case for file output for TXT mode.
+        output_content = generate_html_report(
+            analysis_results=analysis_results, 
+            symbol=symbol, 
+            timeframe=timeframe_str, 
+            output_dir=output_dir_path, # For saving images by html_generator
+            explain=explain,
+            save_charts=True # Assume charts are saved for HTML by default
+        )
+        # Filename for HTML content itself
+        output_filename = _generate_output_filename(symbol, timeframe_str, OutputFormat.HTML, output_dir_path)
+
+    elif output_format_enum == OutputFormat.TEXT or output_format_enum == OutputFormat.TXT:
+        output_content = format_text_analysis(analysis_results, symbol, timeframe_str, explain)
+        if save_to_file: # TXT implies saving
+            output_filename = _generate_output_filename(symbol, timeframe_str, output_format_enum, output_dir_path)
             output_content_for_file = _strip_ansi_codes(output_content) # Ensure clean text for file
 
-    else:\n        raise AnalyzerError(f\"Unsupported output format: {output_format_enum}\")\n
-    # Handle file saving or console printing\n    if output_filename and output_dir_path: # This implies save_to_file was true and filename generated\n        try:\n            # Use specific content for TXT if it was further processed (e.g. ANSI stripped)
-            content_to_write = output_content_for_file if output_format_enum == OutputFormat.TXT else output_content
+    else:
+        raise AnalyzerError(f"Unsupported output format: {output_format_enum}")
+
+    # Handle file saving or console printing
+    if output_filename and output_dir_path: # This implies save_to_file was true and filename generated
+        try:
+            # Use specific content for TXT if it was further processed (e.g. ANSI stripped)
+            content_to_write = output_content_for_file if output_format_enum == OutputFormat.TXT and 'output_content_for_file' in locals() else output_content
             
-            with open(output_filename, 'w', encoding=\'utf-8\') as f:\n                f.write(content_to_write)\n            display_success(f\"Analysis report saved to: {os.path.abspath(output_filename)}\")\n
-            if output_format_enum == OutputFormat.HTML:\n                try:\n                    webbrowser.open(f\"file://{os.path.abspath(output_filename)}\")\n                except Exception as e_web:\n                    display_warning(f\"Could not open HTML report in browser: {e_web}\")\n        except IOError as e:\n            raise AnalyzerError(f\"Error saving report to {output_filename}: {e}\")\n    else:\n        # Print to console if not saving to file (for TEXT and JSON)
+            with open(output_filename, 'w', encoding='utf-8') as f:
+                f.write(content_to_write)
+            display_success(f"Analysis report saved to: {os.path.abspath(output_filename)}")
+
+            if output_format_enum == OutputFormat.HTML:
+                try:
+                    webbrowser.open(f"file://{os.path.abspath(output_filename)}")
+                except Exception as e_web:
+                    display_warning(f"Could not open HTML report in browser: {e_web}")
+        except IOError as e:
+            raise AnalyzerError(f"Error saving report to {output_filename}: {e}")
+    else:
+        # Print to console if not saving to file (for TEXT and JSON)
         # HTML is primarily a file output; direct console print of HTML is not useful.
-        if output_format_enum == OutputFormat.TEXT:\n            Console().print(output_content) # Output from format_text_analysis is Rich-compatible
-        elif output_format_enum == OutputFormat.JSON:\n            Console().print(output_content) # JSON string 
+        if output_format_enum == OutputFormat.TEXT:
+            Console().print(output_content) # Output from format_text_analysis is Rich-compatible
+        elif output_format_enum == OutputFormat.JSON:
+            Console().print(output_content) # JSON string 

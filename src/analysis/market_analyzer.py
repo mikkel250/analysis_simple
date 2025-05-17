@@ -6,7 +6,7 @@ financial market data using different trading timeframes.
 """
 
 import logging
-from typing import Dict, List, Any, Optional, Union
+from typing import Dict, Any, Union
 from datetime import datetime
 
 import pandas as pd
@@ -16,7 +16,6 @@ import plotly.graph_objects as go
 from src.analysis import trading_styles
 from src.analysis import market_data
 from src.plotting import charts
-from src.services.data_fetcher import get_historical_data
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -57,9 +56,9 @@ class MarketAnalyzer:
         self.use_test_data = use_test_data
         self.trading_style = self._get_trading_style(self.timeframe)
         self.data = None
-        self.performance = None
-        self.analysis_results = {}
-        self.visualizations = {}
+        self.performance: Optional[Dict[str, float]] = None
+        self.analysis_results: Dict[str, Any] = {}
+        self.visualizations: Dict[str, go.Figure] = {}
         
         logger.info(f"Initialized MarketAnalyzer for {symbol} with {timeframe} timeframe")
     
@@ -143,6 +142,12 @@ class MarketAnalyzer:
                 interval=interval,
                 period=period
             )
+
+            if self.data is not None and not self.data.empty:
+                ohlcv_cols = ['open', 'high', 'low', 'close', 'volume']
+                for col in ohlcv_cols:
+                    if col in self.data.columns:
+                        self.data[col] = pd.to_numeric(self.data[col], errors='coerce')
             
             return self.data
         except Exception as e:
@@ -210,11 +215,81 @@ class MarketAnalyzer:
         technical_fig = charts.plot_technical_analysis(self.data)
         candlestick_fig = charts.plot_candlestick(self.data)
         
-        return {
+        self.visualizations = {
             'price': price_fig,
             'technical': technical_fig,
             'candlestick': candlestick_fig
         }
+        return self.visualizations
+
+    def analyze(self) -> Dict[str, Any]:
+        """
+        Run the full analysis pipeline and return a consolidated results dictionary.
+        """
+        logger.info(f"Starting full analysis pipeline for {self.symbol}...")
+        
+        # 1. Core data processing and basic analysis (indicators, performance)
+        _core_analysis = self.run_analysis() # Populates self.data, self.performance
+        
+        # 2. Generate textual summaries and interpretations
+        summary_data = self.get_summary() # Uses self.data, self.performance
+        
+        # 3. Generate market cases/scenarios
+        market_cases_data = self.present_cases() # Uses self.data and internal logic
+        
+        # 4. Generate visualizations (Plotly figures)
+        # These might be large or not directly serializable for all output formats from the CLI,
+        # but the CLI's formatters will decide how to handle them (e.g., save HTML, ignore for JSON console).
+        visualizations_data = self.generate_visualizations()
+
+        # 5. Consolidate all results
+        # The structure should align with what `display_market_analysis` in formatters.py expects.
+        # Based on text_renderer, it expects keys like 'summary', 'indicators', 'price_action',
+        # 'candlestick_patterns', 'volume_analysis', 'market_cases'.
+        # The get_summary() method seems to provide most of this under its own structure.
+        # Let's refine the consolidation based on get_summary() output and add other parts.
+
+        # consolidated_results was unused, removing or prefix with _ if needed for debugging
+        # _consolidated_results = {
+        #     "symbol": self.symbol,
+        #     "timeframe": self.timeframe,
+        #     ... (rest of the consolidated_results dict commented out or removed)
+        # }
+        
+        # The formatters.py (specifically text_renderer.py) expects a structure like:
+        # analysis_results.get('summary', {}) -> general_overview
+        # analysis_results.get('indicators', {}) -> indicator data
+        # analysis_results.get('price_action', {})
+        # analysis_results.get('candlestick_patterns', [])
+        # analysis_results.get('volume_analysis', {})
+        # analysis_results.get('market_cases', {})
+        # Let's try to map to this structure more directly for compatibility.
+        
+        final_results_for_formatter = {
+            "summary": { # Corresponds to general_overview and other high-level summaries
+                "general_overview": summary_data.get('summary_text', summary_data.get('general_overview')),
+                "current_price": summary_data.get('current_price'),
+                "period_return": summary_data.get('period_return'),
+                "volatility": summary_data.get('volatility'),
+                "trend": summary_data.get('trend'),
+                # Add other top-level summary items if they exist in summary_data
+            },
+            "price_action": summary_data.get('price_action', {}),
+            "indicators": summary_data.get('indicator_data', {}), # This should be the detailed data with values/interpretations
+            "candlestick_patterns": summary_data.get('candlestick_patterns', []),
+            "volume_analysis": summary_data.get('volume_analysis', {}),
+            "market_cases": market_cases_data, # From present_cases()
+            "visualizations": visualizations_data, # Plotly figures
+            
+            # Include raw data and performance for completeness, though formatters might not use them directly
+            "_raw_ohlcv_data_with_indicators": self.data,
+            "_performance_calculations": self.performance,
+            "_trading_style_used": self.trading_style
+        }
+
+        logger.info(f"Full analysis pipeline for {self.symbol} completed.")
+        self.analysis_results = final_results_for_formatter # Store for potential later access
+        return self.analysis_results
     
     def get_summary(self) -> Dict[str, Any]:
         """
@@ -253,7 +328,7 @@ class MarketAnalyzer:
                 # Try the last close price
                 last_close = self.data['close'].iloc[-1]
                 
-                if not pd.isna(last_close):
+                if pd.notna(last_close):
                     current_price = last_close
                     logger.info(f"Current price for {self.symbol}: {current_price}")
                 else:
@@ -271,7 +346,7 @@ class MarketAnalyzer:
                             for col in alt_price_cols:
                                 if col in self.data.columns:
                                     val = self.data[col].iloc[-1]
-                                    if not pd.isna(val):
+                                    if pd.notna(val):
                                         alt_prices.append(val)
                             
                             if alt_prices:
@@ -291,7 +366,7 @@ class MarketAnalyzer:
             # Handle 24H change safely
             if 'total_return_pct' in self.performance:
                 period_return_val = self.performance['total_return_pct']
-                if not pd.isna(period_return_val):
+                if pd.notna(period_return_val):
                     period_return = period_return_val
                 else:
                     logger.warning(f"24H change for {self.symbol} is NaN, defaulting to 0.0")
@@ -306,12 +381,12 @@ class MarketAnalyzer:
                 volatility_val = self.performance['annualized_volatility_pct']
             
             # If that's not available or is NaN, try volatility
-            if volatility_val is None or pd.isna(volatility_val):
+            if pd.isna(volatility_val):
                 if 'volatility' in self.performance:
                     volatility_val = self.performance['volatility']
             
             # If we have a valid volatility value, use it
-            if volatility_val is not None and not pd.isna(volatility_val):
+            if pd.notna(volatility_val):
                 volatility = volatility_val
             else:
                 logger.warning(f"Volatility for {self.symbol} is NaN or missing, defaulting to 0.0")
@@ -414,10 +489,10 @@ class MarketAnalyzer:
         
         # Simple linear regression to determine trend
         try:
-            slope, intercept = np.polyfit(x, close_values, 1)
+            slope, _intercept = np.polyfit(x, close_values, 1)
         except Exception as e:
             logger.warning(f"Error calculating trend slope: {e}, using default values")
-            slope, intercept = 0, close_values[0] if len(close_values) > 0 else 0
+            slope, _intercept = 0, close_values[0] if len(close_values) > 0 else 0
         
         # Get the first and last prices
         first_price = close_values[0]
@@ -452,17 +527,15 @@ class MarketAnalyzer:
             latest = self.data.iloc[-1]
         except Exception as e:
             logger.error(f"Error accessing latest data: {e}")
-            latest = pd.Series()
+            latest = pd.Series(dtype=float) # Ensure latest is a Series, even if empty
         
         # Determine trend strength using ADX with better NaN handling
-        adx = None
-        if not latest.empty:
-            adx_val = latest.get('ADX_14', None)
-            adx = self._ensure_float(adx_val, None)
+        adx_val = latest.get('ADX_14', None)
+        adx = self._ensure_float(adx_val, None)
         
         strength = "Unknown"
         
-        if adx is not None:
+        if pd.notna(adx):
             if adx > 25:
                 strength = "Strong"
             elif adx > 15:
@@ -491,14 +564,14 @@ class MarketAnalyzer:
             sma_key = f'sma_{window_size}'
             sma = self._ensure_float(latest.get(sma_key, None), None)
             
-            if sma is not None and last_price > 0:
+            if pd.notna(sma) and last_price > 0:
                 signals.append(1 if last_price > sma else -1)
             
             # RSI signal with safer handling
             rsi_val = latest.get('rsi_14', None)
             rsi = self._ensure_float(rsi_val, None)
             
-            if rsi is not None:
+            if pd.notna(rsi):
                 if rsi > 70:
                     signals.append(-1)  # Overbought, potentially bearish
                 elif rsi < 30:
@@ -514,7 +587,7 @@ class MarketAnalyzer:
             macd = self._ensure_float(macd_val, None)
             macd_signal = self._ensure_float(macd_signal_val, None)
             
-            if macd is not None and macd_signal is not None:
+            if pd.notna(macd) and pd.notna(macd_signal):
                 signals.append(1 if macd > macd_signal else -1)
             
             # Bollinger Bands signal with safer handling
@@ -527,7 +600,7 @@ class MarketAnalyzer:
             bb_upper = self._ensure_float(bb_upper_val, None)
             bb_lower = self._ensure_float(bb_lower_val, None)
             
-            if bb_upper is not None and bb_lower is not None:
+            if pd.notna(bb_upper) and pd.notna(bb_lower):
                 if last_price > bb_upper:
                     signals.append(-1)  # Overbought
                 elif last_price < bb_lower:
@@ -543,7 +616,7 @@ class MarketAnalyzer:
             stoch_k = self._ensure_float(stoch_k_val, None)
             stoch_d = self._ensure_float(stoch_d_val, None)
             
-            if stoch_k is not None and stoch_d is not None:
+            if pd.notna(stoch_k) and pd.notna(stoch_d):
                 if stoch_k > 80 and stoch_d > 80:
                     signals.append(-1)  # Overbought
                 elif stoch_k < 20 and stoch_d < 20:
@@ -609,19 +682,19 @@ class MarketAnalyzer:
         adx_str = "N/A"
         
         try:
-            if not pd.isna(slope):
+            if pd.notna(slope):
                 slope_str = f"{slope:.6f}"
         except:
             pass
             
         try:
-            if not pd.isna(percent_change):
+            if pd.notna(percent_change):
                 percent_change_str = f"{percent_change:.2f}"
         except:
             pass
             
         try:
-            if adx is not None and not pd.isna(adx):
+            if pd.notna(adx):
                 adx_str = f"{adx:.2f}"
         except:
             pass
@@ -630,7 +703,7 @@ class MarketAnalyzer:
         explanation = f"Trend direction determined by linear regression slope "
         explanation += f"({slope_str}) and percent change ({percent_change_str}%). "
         
-        if adx is not None and not pd.isna(adx):
+        if pd.notna(adx):
             explanation += f"Trend strength based on ADX value of {adx_str}. "
         else:
             explanation += f"Trend strength estimated from price movement. "
@@ -774,7 +847,7 @@ class MarketAnalyzer:
         
         # RSI interpretation and value with better fallback handling
         rsi = latest.get('rsi_14', None)
-        if rsi is not None and not pd.isna(rsi):
+        if pd.notna(rsi):
             # Valid RSI value
             if rsi > 70:
                 rsi_interp = "Overbought"
@@ -804,8 +877,7 @@ class MarketAnalyzer:
         # Initialize with default values
         macd_values = {'line': 0.0, 'signal': 0.0, 'histogram': 0.0}
         
-        if (macd is not None and macd_signal is not None and 
-            not pd.isna(macd) and not pd.isna(macd_signal)):
+        if pd.notna(macd) and pd.notna(macd_signal):
             # Valid MACD values
             if macd > macd_signal and macd > 0:
                 macd_interp = "Bullish"
@@ -817,7 +889,7 @@ class MarketAnalyzer:
             # Update the values dictionary with actual values
             macd_values['line'] = self._ensure_float(macd, 0.0)
             macd_values['signal'] = self._ensure_float(macd_signal, 0.0)
-            if macd_hist is not None and not pd.isna(macd_hist):
+            if pd.notna(macd_hist):
                 macd_values['histogram'] = self._ensure_float(macd_hist, 0.0)
         else:
             # Use fallback values
@@ -843,8 +915,7 @@ class MarketAnalyzer:
             'percent': 0.0                            # Default: neutral (0%)
         }
         
-        if (bb_lower is not None and bb_upper is not None and close is not None and 
-            not pd.isna(bb_lower) and not pd.isna(bb_upper) and not pd.isna(close)):
+        if pd.notna(bb_lower) and pd.notna(bb_upper) and pd.notna(close):
             # Valid Bollinger Bands values
             if close > bb_upper:
                 bb_interp = "Overbought"
@@ -858,7 +929,7 @@ class MarketAnalyzer:
             bb_values['lower'] = self._ensure_float(bb_lower, bb_values['lower'])
             
             # Calculate percentage distance from the middle band
-            if bb_middle is not None and not pd.isna(bb_middle) and float(bb_middle) != 0:
+            if pd.notna(bb_middle) and float(bb_middle) != 0:
                 bb_percent = ((close - float(bb_middle)) / float(bb_middle)) * 100
                 bb_values['middle'] = self._ensure_float(bb_middle, close)
                 bb_values['percent'] = self._ensure_float(bb_percent, 0.0)
@@ -869,10 +940,10 @@ class MarketAnalyzer:
         
         # ADX interpretation and value with better fallback handling
         adx = latest.get('ADX_14', None)
-        dmp = latest.get('DMP_14', None)
-        dmn = latest.get('DMN_14', None)
+        _dmp = latest.get('DMP_14', None)
+        _dmn = latest.get('DMN_14', None)
         
-        if adx is not None and not pd.isna(adx):
+        if pd.notna(adx):
             # Valid ADX value
             if adx > 25:
                 adx_interp = "Strong Trend"
@@ -895,8 +966,7 @@ class MarketAnalyzer:
         # Initialize with default values
         stoch_values = {'k': 50.0, 'd': 50.0}  # Neutral values
         
-        if (stoch_k is not None and stoch_d is not None and 
-            not pd.isna(stoch_k) and not pd.isna(stoch_d)):
+        if pd.notna(stoch_k) and pd.notna(stoch_d):
             # Valid Stochastic values
             if stoch_k > 80 and stoch_d > 80:
                 stoch_interp = "Overbought"
@@ -920,7 +990,7 @@ class MarketAnalyzer:
         # CCI interpretation and value with better fallback handling
         cci = latest.get('CCI_20', None)
         
-        if cci is not None and not pd.isna(cci):
+        if pd.notna(cci):
             # Valid CCI value
             if cci > 100:
                 cci_interp = "Overbought"
@@ -943,8 +1013,7 @@ class MarketAnalyzer:
         atr_interp = "Unavailable"
         atr_value = close * 0.01 if close else 0.0  # Default to 1% of price
         
-        if (atr is not None and close is not None and close > 0 and 
-            not pd.isna(atr) and not pd.isna(close)):
+        if pd.notna(atr) and pd.notna(close) and close > 0:
             # Valid ATR value
             atr_value = self._ensure_float(atr, atr_value)
             
@@ -969,7 +1038,7 @@ class MarketAnalyzer:
         obv_interp = "Neutral"
         obv_value = 0.0
         
-        if obv is not None and not pd.isna(obv) and len(self.data) > 1:
+        if pd.notna(obv) and len(self.data) > 1:
             # Valid OBV value
             obv_value = self._ensure_float(obv, 0.0)
             
@@ -1012,10 +1081,10 @@ class MarketAnalyzer:
             sma = None
             if sma_key in latest:
                 sma = latest.get(sma_key, None)
-                if sma is not None and not pd.isna(sma):
+                if pd.notna(sma):
                     sma = self._ensure_float(sma, close)
                 
-            if sma is not None and not pd.isna(sma) and close is not None and close > 0:
+            if pd.notna(sma) and pd.notna(close) and close > 0:
                 # Valid SMA value
                 sma_values['sma'] = sma
                 
@@ -1031,7 +1100,7 @@ class MarketAnalyzer:
                         
                         # Calculate SMA trend as percentage change
                         sma_trend_pct = 0
-                        if historical_sma is not None and historical_sma > 0 and not pd.isna(historical_sma):
+                        if pd.notna(historical_sma) and historical_sma > 0:
                             sma_trend_pct = ((sma - historical_sma) / historical_sma) * 100
                         
                         # Determine price position relative to SMA
@@ -1160,18 +1229,18 @@ class MarketAnalyzer:
                         'senkou_span_a': senkou_a_val,
                         'senkou_span_b': senkou_b_val,
                         'chikou_span': chikou_val,
-                        'cloud_bullish': senkou_a_val > senkou_b_val,
+                        'cloud_bullish': False,
                         'position': "Neutral",
                         'tk_cross': "Neutral"
                     }
                 }
             else:
                 # Price position relative to cloud
-                cloud_bullish = latest.get('ichimoku_cloud_bullish', senkou_a_val > senkou_b_val)
+                cloud_bullish = senkou_a_val > senkou_b_val
                 
                 # Is price above or below the cloud?
-                price_above_cloud = close > max(senkou_a_val, senkou_b_val) if not pd.isna(close) else False
-                price_below_cloud = close < min(senkou_a_val, senkou_b_val) if not pd.isna(close) else False
+                price_above_cloud = close > max(senkou_a_val, senkou_b_val) if pd.notna(close) else False
+                price_below_cloud = close < min(senkou_a_val, senkou_b_val) if pd.notna(close) else False
                 
                 # Tenkan-Kijun Cross
                 tk_cross = "Neutral"

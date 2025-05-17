@@ -21,7 +21,6 @@ from .market_analyzer import MarketAnalyzer
 from .trading_styles import (
     apply_trading_style,
     get_current_trading_style,
-    set_trading_style,
     SUPPORTED_STYLES,
     TRADING_STYLE
 )
@@ -49,7 +48,6 @@ __all__ = [
     'MarketAnalyzer',
     'apply_trading_style',
     'get_current_trading_style',
-    'set_trading_style',
     'SUPPORTED_STYLES',
     'TRADING_STYLE'
 ] 

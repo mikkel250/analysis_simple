@@ -265,73 +265,75 @@ def add_technical_indicators(
     ]
 
     for config in indicator_configs:
+        name = config['name']
+        params_from_config = config.get('params', {})
+        
+        full_params = params_from_config.copy()
+        
         try:
-            indicator_data = get_indicator(
-                df.copy(), # Pass a copy to avoid modification by get_indicator if it does so
-                indicator=config['name'],
-                params=config['params'],
-                symbol=symbol,
+            indicator_result_dict = get_indicator(
+                df, # Pass the original df for calculation
+                indicator=name, 
+                params=full_params,
+                symbol=symbol, 
                 timeframe=timeframe,
-                use_cache=True # Enable caching
+                use_cache=True
             )
             
-            if indicator_data and 'values' in indicator_data:
-                values = indicator_data['values']
-                if isinstance(values, dict) and not config.get('multi_cols'): # Single series expected
-                    # This handles cases where 'values' is a dict of {timestamp: value}
-                    # Convert to Series, align index with df_out, and assign
-                    s = pd.Series(values, name=config['col_name']).astype(float)
-                    # Align series index with dataframe index before assigning
-                    s_aligned = s.reindex(df_out.index)
-                    df_out[config['col_name']] = s_aligned
-
-                elif isinstance(values, dict) and config.get('multi_cols'): # Multiple series expected (e.g., MACD, BBands)
-                    # 'values' is a dict of {col_name_from_ta: {timestamp: value}}
-                    for ta_col_name, df_col_name in config['multi_cols'].items():
-                        if ta_col_name in values:
-                            s = pd.Series(values[ta_col_name], name=df_col_name).astype(float)
-                            s_aligned = s.reindex(df_out.index)
-                            df_out[df_col_name] = s_aligned
-                        else:
-                            # Initialize column with NaNs if not returned by indicator service
-                            df_out[df_col_name] = np.nan
-                            logging.warning(f"Column {ta_col_name} not found in {config['name']} output. Initializing {df_col_name} with NaNs.")
-                else:
-                    logging.warning(f"Unexpected format for {config['name']} values or mismatched config. Skipping.")
-            else:
-                logging.warning(f"Could not retrieve or invalid data for indicator: {config['name']}. It will be missing from the DataFrame.")
-                # Ensure columns are created with NaNs if indicator fails
-                if config.get('col_name'):
-                     df_out[config['col_name']] = np.nan
+            if 'values' in indicator_result_dict:
+                indicator_data_dict_format = indicator_result_dict['values']
+                
                 if config.get('multi_cols'):
-                    for df_col_name in config['multi_cols'].values():
-                        df_out[df_col_name] = np.nan
-
+                    for original_col_name, new_col_name in config['multi_cols'].items():
+                        if original_col_name in indicator_data_dict_format:
+                            # Convert dict {str_timestamp: value} to Series
+                            # The timestamps from get_indicator are ISO strings. df_out.index is DatetimeIndex.
+                            # We must ensure alignment.
+                            col_data_dict = indicator_data_dict_format[original_col_name]
+                            if isinstance(col_data_dict, dict):
+                                temp_series = pd.Series(col_data_dict)
+                                temp_series.index = pd.to_datetime(temp_series.index, utc=True)
+                                # Align with df_out's index; this handles missing dates from indicator output
+                                df_out[new_col_name] = temp_series.reindex(df_out.index) 
+                            else:
+                                logger.warning(f"Expected dict for {original_col_name} in {name}, got {type(col_data_dict)}. Skipping.")
+                                df_out[new_col_name] = np.nan # Fallback
+                        else:
+                            logger.warning(f"Column {original_col_name} not found in {name} output. Initializing {new_col_name} with NaNs.")
+                            df_out[new_col_name] = np.nan
+                elif 'col_name' in config: # Single output indicators
+                    new_col_name = config['col_name']
+                    if isinstance(indicator_data_dict_format, dict):
+                        temp_series = pd.Series(indicator_data_dict_format)
+                        temp_series.index = pd.to_datetime(temp_series.index, utc=True)
+                        df_out[new_col_name] = temp_series.reindex(df_out.index)
+                    else:
+                        logger.warning(f"Expected dict for single series {name}, got {type(indicator_data_dict_format)}. Skipping.")
+                        df_out[new_col_name] = np.nan # Fallback
+                
         except Exception as e:
-            logging.error(f"Error calculating indicator {config['name']} via get_indicator: {e}")
-            # Ensure columns are created with NaNs if indicator fails
-            if config.get('col_name'):
-                    df_out[config['col_name']] = np.nan
+            logger.error(f"Error calculating or adding indicator {name} for {symbol}: {e}")
+            # Initialize columns with NaNs if calculation fails for multi_cols
             if config.get('multi_cols'):
-                for df_col_name in config['multi_cols'].values():
-                    df_out[df_col_name] = np.nan
-    
-    # Calculate Ichimoku Cloud Bullish flag after all indicators are processed
-    if 'ISA_9' in df_out.columns and 'ISB_26' in df_out.columns:
-        # Ensure columns are numeric before comparison
-        isa_numeric = pd.to_numeric(df_out['ISA_9'], errors='coerce')
-        isb_numeric = pd.to_numeric(df_out['ISB_26'], errors='coerce')
-        # Check for NaNs that pd.to_numeric might introduce if errors='coerce'
-        if isa_numeric.notna().all() and isb_numeric.notna().all():
-            df_out['ichimoku_cloud_bullish'] = isa_numeric > isb_numeric
-        else:
-            df_out['ichimoku_cloud_bullish'] = False # Default if conversion resulted in NaNs
-            logging.warning("NaN values encountered in ISA_9 or ISB_26 after numeric conversion; 'ichimoku_cloud_bullish' set to False.")
-    else:
-        df_out['ichimoku_cloud_bullish'] = False # Default if source spans not present
-        if not ('ISA_9' in df_out.columns and 'ISB_26' in df_out.columns):
-             logging.warning("'ISA_9' or 'ISB_26' not found for 'ichimoku_cloud_bullish' calculation. Defaulting to False.")
-
+                for _, new_col_name in config['multi_cols'].items():
+                    df_out[new_col_name] = np.nan
+            elif 'col_name' in config:
+                 df_out[config['col_name']] = np.nan
+                 
+    # Ensure all defined indicator columns exist in df_out, even if they failed
+    # This helps prevent KeyErrors later if MarketAnalyzer expects them.
+    all_expected_cols = []
+    for cfg in indicator_configs:
+        if cfg.get('multi_cols'):
+            all_expected_cols.extend(cfg['multi_cols'].values())
+        elif 'col_name' in cfg:
+            all_expected_cols.append(cfg['col_name'])
+            
+    for col in all_expected_cols:
+        if col not in df_out.columns:
+            logger.warning(f"Indicator column {col} was expected but not created. Initializing with NaNs.")
+            df_out[col] = np.nan
+            
     return df_out
 
 # Helper functions for common analysis tasks

@@ -1,7 +1,7 @@
 import os
 import webbrowser
 import re
-from .common import OutputFormat  # Assuming OutputFormat is in common.py
+from src.cli.commands.analyzer_modules.common import OutputFormat  # Assuming OutputFormat is in common.py
 from src.cli.education import get_indicator_explanation
 
 # Helper functions for displaying messages (if they are simple enough to be here,

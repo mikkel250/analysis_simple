@@ -113,6 +113,8 @@ class MarketAnalyzer:
                 limit=DEFAULT_CANDLE_LIMIT,
                 use_cache=True,
             )
+            if self.data is not None and not self.data.empty and self.data.index.tz is not None:
+                self.data.index = self.data.index.tz_convert(None)
             if self.data is None or self.data.empty:
                 logger.warning(
                     f"No data returned for {self.symbol} with timeframe "

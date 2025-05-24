@@ -3,11 +3,11 @@ import os
 import webbrowser
 from rich.console import Console
 
-from .common import OutputFormat, AnalyzerError
-from .json_utils import NumpyEncoder, preprocess_for_json
-from .html_generator import generate_html_report
-from .text_renderer import format_text_analysis
-from .file_utils import _ensure_output_directory, _generate_output_filename, _strip_ansi_codes
+from src.cli.commands.analyzer_modules.common import OutputFormat, AnalyzerError
+from src.cli.commands.analyzer_modules.json_utils import NumpyEncoder, preprocess_for_json
+from src.cli.commands.analyzer_modules.html_generator import generate_html_report
+from src.cli.commands.analyzer_modules.text_renderer import format_text_analysis
+from src.cli.commands.analyzer_modules.file_utils import _ensure_output_directory, _generate_output_filename, _strip_ansi_codes
 
 # It might be better to have these display functions in a more central UI/display utility module
 # For now, keeping them here if formatters.py is the main interaction point for these messages.

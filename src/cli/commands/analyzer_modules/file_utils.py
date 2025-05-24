@@ -1,7 +1,7 @@
 import os
 import re
 import datetime
-from .common import OutputFormat # Assuming common.py is in the same directory
+from src.cli.commands.analyzer_modules.common import OutputFormat # Assuming common.py is in the same directory
 
 def _ensure_output_directory(output_type: str) -> str:
     """

@@ -15,11 +15,11 @@ from src.analysis.market_analyzer import MarketAnalyzer
 
 # New utility modules
 # TimeframeOption removed, direct strings will be used
-from .analyzer_modules.common import AnalyzerError, OutputFormat 
-from .analyzer_modules.formatters import display_market_analysis
+from src.cli.commands.analyzer_modules.common import AnalyzerError, OutputFormat 
+from src.cli.commands.analyzer_modules.formatters import display_market_analysis
 # display_info, display_success, display_warning, display_error are already in formatters
 # but keeping direct import for now if used elsewhere here, can be cleaned later
-from .analyzer_modules.formatters import display_info, display_success, display_warning, display_error 
+from src.cli.commands.analyzer_modules.formatters import display_info, display_success, display_warning, display_error 
 
 # Configure logging
 logger = logging.getLogger(__name__)

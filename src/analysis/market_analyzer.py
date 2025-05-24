@@ -6,19 +6,37 @@ financial market data using different trading timeframes.
 """
 
 import logging
-from typing import Dict, Any, Union
+from typing import Dict, Any, Optional
 from datetime import datetime
 
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
+import talib
 
-from src.analysis import trading_styles
 from src.analysis import market_data
 from src.plotting import charts
+from src.cli.education import get_volatility_explanation
+
+# Attempt to import AdvancedMarketAnalyzer, make it optional for now
+try:
+    from src.analysis.advanced_analyzer import AdvancedMarketAnalyzer
+except ImportError:
+    AdvancedMarketAnalyzer = None
+    logger = logging.getLogger(
+        __name__
+    )  # Ensure logger is defined if import fails early
+    logger.warning(
+        "AdvancedMarketAnalyzer could not be imported. Advanced analytics will be unavailable."
+    )
+
 
 # Set up logging
 logger = logging.getLogger(__name__)
+
+# Default number of candles to fetch for historical data
+DEFAULT_CANDLE_LIMIT = 200
+
 
 # Helper function to convert confidence levels to numeric values for comparison
 def confidence_level(confidence: str) -> int:
@@ -26,1657 +44,1272 @@ def confidence_level(confidence: str) -> int:
     levels = {"high": 3, "medium": 2, "low": 1}
     return levels.get(confidence.lower(), 0)
 
+
 class MarketAnalyzer:
     """
     Market analyzer for financial data analysis.
-    
+
     This class provides methods to fetch, analyze, and visualize financial market data
-    using different trading timeframes (short, medium, long).
-    
-    Args:
-        symbol: Stock ticker symbol to analyze
-        timeframe: Trading timeframe ('short', 'medium', 'long')
-        use_test_data: If True, uses test data instead of fetching from API
+    using specific string timeframes (e.g., '1h', '1d').
     """
-    
-    def __init__(self, symbol: str, timeframe: str = "medium", use_test_data: bool = False):
-        """
-        Initialize the market analyzer.
-        
-        Args:
-            symbol: Stock ticker symbol
-            timeframe: Trading timeframe ('short', 'medium', 'long')
-            use_test_data: If True, uses test data instead of fetching from API
-        
-        Raises:
-            ValueError: If the timeframe is invalid
-        """
+
+    def __init__(self, symbol: str, timeframe: str = "1d", use_test_data: bool = False):
         self.symbol = symbol
         self.timeframe = timeframe.lower()
         self.use_test_data = use_test_data
-        self.trading_style = self._get_trading_style(self.timeframe)
-        self.data = None
+        self.data: Optional[pd.DataFrame] = None
         self.performance: Optional[Dict[str, float]] = None
-        self.analysis_results: Dict[str, Any] = {}
+        self.analysis_results: Dict[str, Any] = {}  # Stores all detailed analysis
         self.visualizations: Dict[str, go.Figure] = {}
-        
-        logger.info(f"Initialized MarketAnalyzer for {symbol} with {timeframe} timeframe")
-    
-    def _get_trading_style(self, timeframe: str) -> Dict[str, Any]:
-        """
-        Get the trading style settings for the specified timeframe.
-        
-        Args:
-            timeframe: Trading timeframe ('short', 'medium', 'long')
-            
-        Returns:
-            Dict containing the trading style settings
-            
-        Raises:
-            ValueError: If the timeframe is invalid
-        """
-        if timeframe == "short":
-            return trading_styles.SHORT_SETTINGS
-        elif timeframe == "medium":
-            return trading_styles.MEDIUM_SETTINGS
-        elif timeframe == "long":
-            return trading_styles.LONG_SETTINGS
-        else:
-            raise ValueError(f"Invalid timeframe: {timeframe}")
-    
-    def fetch_data(self) -> pd.DataFrame:
-        """
-        Fetch market data for the symbol using the configured timeframe.
-        
-        Returns:
-            DataFrame containing the market data
-            
-        Raises:
-            ValueError: If no data is found for the symbol
-        """
-        from src.analysis.market_data import fetch_market_data
-        
-        # Use test data for testing purposes
-        if self.use_test_data:
-            # Create mock data with 100 rows
-            dates = pd.date_range(end=pd.Timestamp.now(), periods=100, freq='15min')
-            
-            # Generate random price data with a slight uptrend
-            base_price = 50000  # Base price for BTC
-            trend = np.linspace(0, 0.05, 100)  # 5% uptrend
-            noise = np.random.normal(0, 0.01, 100)  # 1% daily volatility
-            
-            # Calculate OHLCV data
-            close_prices = base_price * (1 + trend + noise)
-            open_prices = close_prices * (1 + np.random.normal(0, 0.002, 100))
-            high_prices = np.maximum(close_prices, open_prices) * (1 + abs(np.random.normal(0, 0.003, 100)))
-            low_prices = np.minimum(close_prices, open_prices) * (1 - abs(np.random.normal(0, 0.003, 100)))
-            volumes = np.random.normal(1000, 200, 100) * (1 + abs(noise) * 5)
-            
-            # Create DataFrame
-            self.data = pd.DataFrame({
-                'date': dates,
-                'open': open_prices,
-                'high': high_prices,
-                'low': low_prices,
-                'close': close_prices,
-                'volume': volumes
-            })
-            
-            # Set index
-            self.data.set_index('date', inplace=True)
-            logger.info(f"Using test data for {self.symbol}")
-            
-            return self.data
-        
-        # Otherwise fetch real data
-        interval = self.trading_style['intervals'][1]  # Middle option as default
-        period = self.trading_style['periods'][1]      # Middle option as default
-        
-        logger.info(f"Fetching data for {self.symbol} with interval={interval}, period={period}")
-        
-        try:
-            # Fetch the data
-            self.data = fetch_market_data(
-                symbol=self.symbol,
-                interval=interval,
-                period=period
-            )
 
-            if self.data is not None and not self.data.empty:
-                ohlcv_cols = ['open', 'high', 'low', 'close', 'volume']
-                for col in ohlcv_cols:
-                    if col in self.data.columns:
-                        self.data[col] = pd.to_numeric(self.data[col], errors='coerce')
-            
+        logger.info(
+            f"Initialized MarketAnalyzer for {self.symbol} with {self.timeframe} timeframe"
+        )
+
+    def fetch_data(self) -> pd.DataFrame:
+        if self.use_test_data:
+            dates = pd.date_range(end=pd.Timestamp.now(), periods=100, freq="15min")
+            base_price = 50000 + np.random.randint(-5000, 5000)
+            trend_val = np.random.choice([-0.05, 0, 0.05])
+            trend = np.linspace(0, trend_val, 100)
+            noise = np.random.normal(0, 0.015, 100)
+            close_prices: np.ndarray = base_price * (1 + trend + noise)
+            open_prices: np.ndarray = close_prices * (1 + np.random.normal(0, 0.002, 100))
+            high_prices: np.ndarray = np.maximum(close_prices, open_prices) * (
+                1 + abs(np.random.normal(0, 0.005, 100))
+            )
+            low_prices: np.ndarray = np.minimum(close_prices, open_prices) * (
+                1 - abs(np.random.normal(0, 0.005, 100))
+            )
+            volumes = np.random.randint(500, 2000, 100) * (
+                1 + abs(noise) * 10
+            )
+            self.data = pd.DataFrame(
+                {
+                    "date": dates,
+                    "open": open_prices,
+                    "high": high_prices,
+                    "low": low_prices,
+                    "close": close_prices,
+                    "volume": volumes.astype(float),
+                }
+            )
+            self.data.set_index("date", inplace=True)
+            if self.data.index.tz is not None:
+                self.data.index = self.data.index.tz_convert(None)
+            logger.info(
+                f"Using test data for {self.symbol}, shape: {self.data.shape}"
+            )
             return self.data
+        logger.info(
+            f"Fetching data for {self.symbol} with timeframe={self.timeframe}, "
+            f"limit={DEFAULT_CANDLE_LIMIT}"
+        )
+        try:
+            from src.services.data_fetcher import get_historical_data
+            self.data = get_historical_data(
+                symbol=self.symbol,
+                timeframe=self.timeframe,
+                limit=DEFAULT_CANDLE_LIMIT,
+                use_cache=True,
+            )
+            if self.data is None or self.data.empty:
+                logger.warning(
+                    f"No data returned for {self.symbol} with timeframe "
+                    f"{self.timeframe}"
+                )
+                self.data = pd.DataFrame()
+            else:
+                logger.debug(
+                    f"Successfully fetched data for {self.symbol}, shape: "
+                    f"{self.data.shape}. Columns: {self.data.columns.tolist()}"
+                )
         except Exception as e:
-            logger.error(f"Error fetching data: {e}")
-            raise
-    
-    def run_analysis(self) -> Dict[str, Any]:
+            logger.error(
+                f"Error fetching data for {self.symbol}, timeframe "
+                f"{self.timeframe}: {e}",
+                exc_info=True,
+            )
+            self.data = pd.DataFrame()
+        return self.data
+
+    def run_analysis(self) -> None:
         """
-        Run market analysis on the data.
-        
-        This will:
-        1. Fetch data if not already fetched
-        2. Add technical indicators
-        3. Calculate performance metrics
-        
-        Returns:
-            Dict containing the analysis results:
-            - 'data': DataFrame with technical indicators
-            - 'performance': Dict with performance metrics
-            - 'trading_style': Dict with trading style settings
+        Run core market analysis (indicators, performance).
+        Populates self.data (with indicators) and self.performance.
         """
-        # Fetch data if not already fetched
         if self.data is None:
             self.fetch_data()
-        
-        logger.info(f"Running analysis for {self.symbol}")
-        
-        # Use the appropriate window size for the current timeframe
-        window_size = self.trading_style['window_sizes'][0]  # Use the first window size
-        
-        # Add technical indicators with timeframe-specific window size
-        self.data = market_data.add_technical_indicators(self.data, window_size=window_size)
-        
-        # Calculate performance metrics
+        if self.data is None or self.data.empty:
+            logger.warning(
+                f"Data for {self.symbol} is empty. Skipping core analysis."
+            )
+            self.analysis_results["error"] = (
+                "Data could not be fetched or is empty."
+            )
+            self.performance = {}
+            return
+        logger.info(f"Running core analysis for {self.symbol}")
+        # Add technical indicators using MarketData class
+        market_data_obj = market_data.MarketData(self.data.copy(), self.symbol, self.timeframe)
+        market_data_obj.add_technical_indicators()
+        self.data = market_data_obj.data
         self.performance = market_data.get_performance_summary(self.data)
-        
-        return {
-            'data': self.data,
-            'performance': self.performance,
-            'trading_style': self.trading_style
-        }
-    
-    def generate_visualizations(self) -> Dict[str, go.Figure]:
+        self.analysis_results["data_with_indicators"] = self.data
+        self.analysis_results["performance"] = self.performance
+        # Detect candlestick patterns
+        self.analysis_results["candlestick_patterns"] = self._detect_candlestick_patterns()
+        logger.info(
+            f"Core analysis complete for {self.symbol}. Data shape with "
+            f"indicators: {self.data.shape}"
+        )
+
+    def generate_visualizations(self) -> None:
         """
-        Generate visualizations for the data.
-        
-        This will:
-        1. Run analysis if not already run
-        2. Generate price history, technical analysis, and candlestick charts
-        
-        Returns:
-            Dict containing the visualizations:
-            - 'price': Price history chart
-            - 'technical': Technical analysis chart
-            - 'candlestick': Candlestick chart
+        Generate visualizations for the data. Populates self.visualizations.
         """
-        # Run analysis if not already run
-        if self.data is None:
-            self.run_analysis()
-        
+        if self.data is None or self.data.empty or "close" not in self.data.columns:
+            logger.warning(
+                f"Cannot generate visualizations for {self.symbol} due to missing or empty data."
+            )
+            self.visualizations = {}
+            return
+
+        if self.analysis_results.get("error"):  # If core analysis failed
+            logger.warning(
+                f"Skipping visualizations due to error in core analysis for {self.symbol}."
+            )
+            self.visualizations = {}
+            return
+
         logger.info(f"Generating visualizations for {self.symbol}")
-        
-        # Generate charts
-        price_fig = charts.plot_price_history(self.data)
-        technical_fig = charts.plot_technical_analysis(self.data)
-        candlestick_fig = charts.plot_candlestick(self.data)
-        
-        self.visualizations = {
-            'price': price_fig,
-            'technical': technical_fig,
-            'candlestick': candlestick_fig
+        try:
+            price_fig = charts.plot_price_history(self.data, self.symbol)
+            technical_fig = charts.plot_technical_analysis(self.data, self.symbol)
+            candlestick_fig = charts.plot_candlestick(self.data, self.symbol)
+
+            self.visualizations = {
+                "price_history": price_fig,
+                "technical_indicators": technical_fig,
+                "candlestick": candlestick_fig,
+            }
+            logger.info(f"Visualizations generated for {self.symbol}.")
+        except Exception as e:
+            logger.error(
+                f"Error generating visualizations for {self.symbol}: {e}", exc_info=True
+            )
+            self.visualizations = {}
+
+    def _get_price_summary(self) -> Dict[str, Any]:
+        if self.data is None or self.data.empty or "close" not in self.data.columns:
+            return {"error": "Price data not available for summary."}
+
+        current_price = self.data["close"].iloc[-1]
+        high_price = (
+            self.data["high"].iloc[-1] if "high" in self.data.columns else current_price
+        )
+        low_price = (
+            self.data["low"].iloc[-1] if "low" in self.data.columns else current_price
+        )
+
+        price_summary = {
+            "current_price": f"{current_price:.2f}",
+            "last_high": f"{high_price:.2f}",
+            "last_low": f"{low_price:.2f}",
         }
-        return self.visualizations
+        if self.performance:
+            price_summary["period_return_pct"] = (
+                f"{self.performance.get('total_return_pct', 0):.2f}%"
+            )
+            price_summary["start_price"] = (
+                f"{self.performance.get('start_price', 0):.2f}"
+            )
+            price_summary["end_price"] = f"{self.performance.get('end_price', 0):.2f}"
 
-    def analyze(self) -> Dict[str, Any]:
-        """
-        Run the full analysis pipeline and return a consolidated results dictionary.
-        """
-        logger.info(f"Starting full analysis pipeline for {self.symbol}...")
-        
-        # 1. Core data processing and basic analysis (indicators, performance)
-        _core_analysis = self.run_analysis() # Populates self.data, self.performance
-        
-        # 2. Generate textual summaries and interpretations
-        summary_data = self.get_summary() # Uses self.data, self.performance
-        
-        # 3. Generate market cases/scenarios
-        market_cases_data = self.present_cases() # Uses self.data and internal logic
-        
-        # 4. Generate visualizations (Plotly figures)
-        # These might be large or not directly serializable for all output formats from the CLI,
-        # but the CLI's formatters will decide how to handle them (e.g., save HTML, ignore for JSON console).
-        visualizations_data = self.generate_visualizations()
+        return price_summary
 
-        # 5. Consolidate all results
-        # The structure should align with what `display_market_analysis` in formatters.py expects.
-        # Based on text_renderer, it expects keys like 'summary', 'indicators', 'price_action',
-        # 'candlestick_patterns', 'volume_analysis', 'market_cases'.
-        # The get_summary() method seems to provide most of this under its own structure.
-        # Let's refine the consolidation based on get_summary() output and add other parts.
+    def _get_volatility_summary(self) -> Dict[str, Any]:
+        if self.performance is None:
+            return {"error": "Performance data not available for volatility summary."}
 
-        # consolidated_results was unused, removing or prefix with _ if needed for debugging
-        # _consolidated_results = {
-        #     "symbol": self.symbol,
-        #     "timeframe": self.timeframe,
-        #     ... (rest of the consolidated_results dict commented out or removed)
-        # }
-        
-        # The formatters.py (specifically text_renderer.py) expects a structure like:
-        # analysis_results.get('summary', {}) -> general_overview
-        # analysis_results.get('indicators', {}) -> indicator data
-        # analysis_results.get('price_action', {})
-        # analysis_results.get('candlestick_patterns', [])
-        # analysis_results.get('volume_analysis', {})
-        # analysis_results.get('market_cases', {})
-        # Let's try to map to this structure more directly for compatibility.
-        
-        final_results_for_formatter = {
-            "summary": { # Corresponds to general_overview and other high-level summaries
-                "general_overview": summary_data.get('summary_text', summary_data.get('general_overview')),
-                "current_price": summary_data.get('current_price'),
-                "period_return": summary_data.get('period_return'),
-                "volatility": summary_data.get('volatility'),
-                "trend": summary_data.get('trend'),
-                # Add other top-level summary items if they exist in summary_data
-            },
-            "price_action": summary_data.get('price_action', {}),
-            "indicators": summary_data.get('indicator_data', {}), # This should be the detailed data with values/interpretations
-            "candlestick_patterns": summary_data.get('candlestick_patterns', []),
-            "volume_analysis": summary_data.get('volume_analysis', {}),
-            "market_cases": market_cases_data, # From present_cases()
-            "visualizations": visualizations_data, # Plotly figures
-            
-            # Include raw data and performance for completeness, though formatters might not use them directly
-            "_raw_ohlcv_data_with_indicators": self.data,
-            "_performance_calculations": self.performance,
-            "_trading_style_used": self.trading_style
+        # Try both keys for compatibility
+        volatility_pct = self.performance.get(
+            "annualized_volatility_pct",
+            self.performance.get("annual_volatility_pct", self.performance.get("volatility", 0))
+        )
+        # Handle N/A or missing values
+        if volatility_pct is None or (isinstance(volatility_pct, str) and volatility_pct.lower() in ["n/a", "na"]):
+            volatility_pct = 0.0
+        try:
+            volatility_pct = float(volatility_pct)
+        except Exception:
+            volatility_pct = 0.0
+
+        vol_level = "N/A"
+        if volatility_pct > 100:
+            vol_level = "Very High"
+        elif volatility_pct > 60:
+            vol_level = "High"
+        elif volatility_pct > 30:
+            vol_level = "Moderate"
+        elif volatility_pct > 0:
+            vol_level = "Low"
+        elif volatility_pct == 0:
+            vol_level = "None/Unavailable"
+
+        # Educational explanation logic
+        if volatility_pct == 0 or np.isnan(volatility_pct):
+            explanation = (
+                "Volatility is reported as zero or unavailable. This usually means there was insufficient price history, all prices were constant, or a calculation issue occurred. "
+                "A zero volatility value is only reasonable if the asset price did not change at all during the analyzed period. Otherwise, this may indicate missing or invalid data. "
+                + get_volatility_explanation(volatility_pct)
+            )
+        else:
+            explanation = get_volatility_explanation(volatility_pct)
+
+        return {
+            "annualized_volatility_pct": f"{volatility_pct:.2f}%",
+            "volatility_level": vol_level,
+            "max_drawdown_pct": f"{self.performance.get('max_drawdown_pct', 0):.2f}%",
+            "type": "Returns-Based Volatility",
+            "details": explanation
         }
 
-        logger.info(f"Full analysis pipeline for {self.symbol} completed.")
-        self.analysis_results = final_results_for_formatter # Store for potential later access
-        return self.analysis_results
-    
+    def _get_trend_summary(self) -> Dict[str, Any]:
+        trend_info = self._determine_trend()
+        if isinstance(trend_info, str):  # Simple trend string
+            return {
+                "overall_trend": trend_info,
+                "details": "Trend determined by simple method.",
+            }
+        # Detailed trend object
+        return trend_info
+
+    def _get_support_resistance_summary(self) -> Dict[str, Any]:
+        # This is a simplified S/R identification. A more robust one would involve more complex algorithms.
+        if (
+            self.data is None or self.data.empty or len(self.data) < 10
+        ):  # Need some data points
+            return {"status": "Not enough data for S/R levels"}
+
+        recent_lows = self.data["low"].rolling(window=10, min_periods=3).min().dropna()
+        recent_highs = (
+            self.data["high"].rolling(window=10, min_periods=3).max().dropna()
+        )
+
+        current_price = self.data["close"].iloc[-1]
+
+        support_levels = sorted(
+            list(set(recent_lows[recent_lows < current_price].tail(3).tolist())),
+            reverse=True,
+        )
+        resistance_levels = sorted(
+            list(set(recent_highs[recent_highs > current_price].head(3).tolist()))
+        )
+
+        return {
+            "support": [f"{s:.2f}" for s in support_levels][:2],  # Max 2 levels
+            "resistance": [f"{r:.2f}" for r in resistance_levels][:2],  # Max 2 levels
+            "note": "Basic S/R based on recent rolling min/max.",
+        }
+
+    def _get_volume_analysis_summary(self) -> Dict[str, Any]:
+        if (
+            self.data is None
+            or "volume" not in self.data.columns
+            or self.data["volume"].empty
+        ):
+            return {"status": "Volume data not available."}
+
+        avg_volume = (
+            self.data["volume"].rolling(window=20, min_periods=5).mean().iloc[-1]
+        )
+        current_volume = self.data["volume"].iloc[-1]
+
+        status = "Normal"
+        details = f"Current volume ({current_volume:,.0f}) is near the 20-period average ({avg_volume:,.0f})."
+        if pd.isna(avg_volume) or avg_volume == 0:
+            details = f"Current volume is {current_volume:,.0f}. Average volume not available or zero."
+        elif current_volume > avg_volume * 2:
+            status = "Volume Spike"
+            details = f"Volume spike: current ({current_volume:,.0f}) significantly above average ({avg_volume:,.0f})."
+        elif current_volume < avg_volume * 0.5:
+            status = "Low Volume"
+            details = f"Low volume: current ({current_volume:,.0f}) significantly below average ({avg_volume:,.0f})."
+
+        return {"volume_status": status, "details": details}
+
     def get_summary(self) -> Dict[str, Any]:
         """
-        Get a summary of the analysis.
-        
-        This will:
-        1. Run analysis if not already run
-        2. Determine the trend
-        3. Summarize technical indicators
-        
-        Returns:
-            Dict containing the summary:
-            - 'symbol': Stock symbol
-            - 'timeframe': Trading timeframe
-            - 'current_price': Latest closing price
-            - 'period_return': Total return over the period
-            - 'volatility': Price volatility
-            - 'trend': Overall price trend (string or detailed dictionary)
-            - 'indicators': Summary of technical indicators (interpretations)
-            - 'indicator_data': Detailed indicator data with values
+        Generate a comprehensive textual summary of the market analysis, using enhanced trend and indicator confluence.
         """
-        # Run analysis if not already run
-        if self.data is None or self.performance is None:
-            self.run_analysis()
-        
-        logger.info(f"Creating summary for {self.symbol}")
-        
-        # Initialize default values
-        current_price = 0.0
-        period_return = 0.0
-        volatility = 0.0
-        
-        # Get current price with improved handling
-        if self.data is not None and not self.data.empty:
-            if 'close' in self.data.columns:
-                # Try the last close price
-                last_close = self.data['close'].iloc[-1]
-                
-                if pd.notna(last_close):
-                    current_price = last_close
-                    logger.info(f"Current price for {self.symbol}: {current_price}")
-                else:
-                    logger.warning(f"Current price for {self.symbol} is NaN, attempting to find last valid price")
-                    # Try to get the last valid close price with better error handling
-                    try:
-                        valid_prices = self.data['close'].dropna()
-                        if not valid_prices.empty:
-                            current_price = valid_prices.iloc[-1]
-                            logger.info(f"Using last valid price for {self.symbol}: {current_price}")
-                        else:
-                            # If no valid prices, try to get the mean of open, high, low
-                            alt_price_cols = ['open', 'high', 'low']
-                            alt_prices = []
-                            for col in alt_price_cols:
-                                if col in self.data.columns:
-                                    val = self.data[col].iloc[-1]
-                                    if pd.notna(val):
-                                        alt_prices.append(val)
-                            
-                            if alt_prices:
-                                current_price = sum(alt_prices) / len(alt_prices)
-                                logger.warning(f"No valid close price found, using average of other price columns: {current_price}")
-                            else:
-                                logger.error(f"Could not find any valid price for {self.symbol}, defaulting to 0.0")
-                    except Exception as e:
-                        logger.error(f"Error finding valid price for {self.symbol}: {e}, defaulting to 0.0")
-            else:
-                logger.warning(f"Close column missing for {self.symbol}, defaulting price to 0.0")
-        else:
-            logger.warning(f"Data is None or empty for {self.symbol}, defaulting price to 0.0")
-        
-        # Handle performance metrics with better error checking
-        if self.performance is not None:
-            # Handle 24H change safely
-            if 'total_return_pct' in self.performance:
-                period_return_val = self.performance['total_return_pct']
-                if pd.notna(period_return_val):
-                    period_return = period_return_val
-                else:
-                    logger.warning(f"24H change for {self.symbol} is NaN, defaulting to 0.0")
-            else:
-                logger.warning(f"Total return not found in performance data for {self.symbol}, defaulting to 0.0")
-            
-            # Handle volatility with fallbacks
-            volatility_val = None
-            
-            # Try annualized_volatility_pct first
-            if 'annualized_volatility_pct' in self.performance:
-                volatility_val = self.performance['annualized_volatility_pct']
-            
-            # If that's not available or is NaN, try volatility
-            if pd.isna(volatility_val):
-                if 'volatility' in self.performance:
-                    volatility_val = self.performance['volatility']
-            
-            # If we have a valid volatility value, use it
-            if pd.notna(volatility_val):
-                volatility = volatility_val
-            else:
-                logger.warning(f"Volatility for {self.symbol} is NaN or missing, defaulting to 0.0")
-        else:
-            logger.warning(f"Performance data is None for {self.symbol}, using default values for return and volatility")
-        
-        # Determine trend
-        trend_data = self._determine_trend()
-        if not isinstance(trend_data, dict):
-            # Wrap string in a dict with sensible defaults
-            trend_data = {
-                'direction': trend_data,
-                'strength': "Unknown",
-                'confidence': "Unknown",
-                'signals': {
-                    'short_term': "Unknown",
-                    'medium_term': "Unknown",
-                    'long_term': "Unknown",
-                    'action': "Hold"
-                },
-                'explanation': "Trend returned as string, not dict. Upstream logic should be improved."
-            }
-        trend = trend_data['direction']
-        
-        # Summarize indicators
-        indicator_data = self._summarize_indicators()
-        
-        # For backward compatibility, extract just the interpretations
-        indicators = indicator_data.get('interpretations', {})
-        
-        # Build the summary with validated values
-        summary = {
-            'symbol': self.symbol,
-            'timeframe': self.timeframe,
-            'current_price': current_price,
-            'period_return': period_return,
-            'volatility': volatility,
-            'trend': trend_data,  # Use the full trend data dictionary
-            'trend_direction': trend,  # For backward compatibility
-            'indicators': indicators,
-            'indicator_data': indicator_data
-        }
-        
-        # Log summary price information with safer formatting
-        try:
-            logger.info(f"Summary for {self.symbol}: price={summary['current_price']}, return={summary['period_return']:.2f}%, volatility={summary['volatility']:.2f}%")
-        except Exception as e:
-            logger.error(f"Error logging summary for {self.symbol}: {e}")
-        
-        return summary
-    
-    def _determine_trend(self) -> Union[str, Dict[str, Any]]:
-        """
-        Determine the overall price trend with comprehensive analysis.
-        
-        Returns:
-            Dictionary with detailed trend analysis:
-            - 'direction': String describing the trend ('Uptrend', 'Downtrend', or 'Sideways')
-            - 'strength': Trend strength ('Strong', 'Moderate', 'Weak')
-            - 'confidence': Confidence level ('High', 'Medium', 'Low')
-            - 'signals': Dictionary with timeframe signals and action recommendation
-            - 'explanation': Detailed explanation of trend determination
-            - 'advanced_recommendation': Advanced trading recommendations (if available)
-        """
-        # Check if data is available
+        if self.data is None or self.data.empty:
+            self.run_analysis()  # Ensure core analysis is run
+
+        if self.analysis_results.get("error"):
+            return {"error": self.analysis_results["error"]}
+
         if self.data is None or self.data.empty:
             return {
-                'direction': "Insufficient data",
-                'strength': "Unknown",
-                'confidence': "Low",
-                'signals': {
-                    'short_term': "Unknown",
-                    'medium_term': "Unknown",
-                    'long_term': "Unknown",
-                    'action': "Hold"
-                },
-                'explanation': "No data available for trend determination."
+                "error": "Data could not be fetched or is still empty after analysis attempt."
             }
-        
-        # Get close values with NaN handling
-        close_values = self.data['close'].dropna().values
-        
-        # If we have no valid close values, return default
-        if len(close_values) < 2:
-            return {
-                'direction': "Insufficient data",
-                'strength': "Unknown",
-                'confidence': "Low",
-                'signals': {
-                    'short_term': "Unknown",
-                    'medium_term': "Unknown",
-                    'long_term': "Unknown",
-                    'action': "Hold"
-                },
-                'explanation': "Insufficient price data for trend determination."
-            }
-        
-        # Calculate the linear regression slope of the closing prices
-        x = np.arange(len(close_values))
-        
-        # Simple linear regression to determine trend
-        try:
-            slope, _intercept = np.polyfit(x, close_values, 1)
-        except Exception as e:
-            logger.warning(f"Error calculating trend slope: {e}, using default values")
-            slope, _intercept = 0, close_values[0] if len(close_values) > 0 else 0
-        
-        # Get the first and last prices
-        first_price = close_values[0]
-        last_price = close_values[-1]
-        
-        # Calculate percent change with safety checks
-        try:
-            if first_price != 0:
-                percent_change = (last_price - first_price) / first_price * 100
-            else:
-                percent_change = 0
-                logger.warning("First price is zero, using percent_change=0")
-        except Exception as e:
-            logger.warning(f"Error calculating percent change: {e}, using default value")
-            percent_change = 0
-        
-        # Set default direction
-        direction = "Sideways"
-        
-        # Determine basic trend direction based on slope and percent change
-        # Handle NaN values using the _ensure_float helper
-        safe_slope = self._ensure_float(slope, 0.0)
-        safe_percent_change = self._ensure_float(percent_change, 0.0)
-        
-        if safe_slope > 0 and safe_percent_change > 1:
-            direction = "Uptrend"
-        elif safe_slope < 0 and safe_percent_change < -1:
-            direction = "Downtrend"
-        
-        # Get the latest technical indicator values
-        try:
-            latest = self.data.iloc[-1]
-        except Exception as e:
-            logger.error(f"Error accessing latest data: {e}")
-            latest = pd.Series(dtype=float) # Ensure latest is a Series, even if empty
-        
-        # Determine trend strength using ADX with better NaN handling
-        adx_val = latest.get('ADX_14', None)
-        adx = self._ensure_float(adx_val, None)
-        
-        strength = "Unknown"
-        
-        if pd.notna(adx):
-            if adx > 25:
-                strength = "Strong"
-            elif adx > 15:
-                strength = "Moderate"
-            else:
-                strength = "Weak"
-        elif safe_slope != 0:
-            # Fall back to slope if ADX is not available
-            normalized_slope = abs(safe_slope) / max(first_price, 0.1)  # Normalize by first price with safety
-            if normalized_slope > 0.001:  # Arbitrary threshold, adjust based on testing
-                strength = "Strong"
-            elif normalized_slope > 0.0005:
-                strength = "Moderate"
-            else:
-                strength = "Weak"
-        else:
-            # Default to Weak if we can't determine strength
-            strength = "Weak"
-        
-        # Collect indicator signals for determining confidence and timeframe signals
-        signals = []
-        
-        # SMA signal (comparing price to SMA) with safer handling
-        if not latest.empty:
-            window_size = self.trading_style['window_sizes'][0]
-            sma_key = f'sma_{window_size}'
-            sma = self._ensure_float(latest.get(sma_key, None), None)
-            
-            if pd.notna(sma) and last_price > 0:
-                signals.append(1 if last_price > sma else -1)
-            
-            # RSI signal with safer handling
-            rsi_val = latest.get('rsi_14', None)
-            rsi = self._ensure_float(rsi_val, None)
-            
-            if pd.notna(rsi):
-                if rsi > 70:
-                    signals.append(-1)  # Overbought, potentially bearish
-                elif rsi < 30:
-                    signals.append(1)   # Oversold, potentially bullish
-                else:
-                    # Neutral but leaning
-                    signals.append(0.5 if rsi > 50 else -0.5)
-            
-            # MACD signal with safer handling
-            macd_val = latest.get('MACD_12_26_9', None)
-            macd_signal_val = latest.get('MACDs_12_26_9', None)
-            
-            macd = self._ensure_float(macd_val, None)
-            macd_signal = self._ensure_float(macd_signal_val, None)
-            
-            if pd.notna(macd) and pd.notna(macd_signal):
-                signals.append(1 if macd > macd_signal else -1)
-            
-            # Bollinger Bands signal with safer handling
-            bb_upper_key = f'BBU_{window_size}_2.0'
-            bb_lower_key = f'BBL_{window_size}_2.0'
-            
-            bb_upper_val = latest.get(bb_upper_key, None)
-            bb_lower_val = latest.get(bb_lower_key, None)
-            
-            bb_upper = self._ensure_float(bb_upper_val, None)
-            bb_lower = self._ensure_float(bb_lower_val, None)
-            
-            if pd.notna(bb_upper) and pd.notna(bb_lower):
-                if last_price > bb_upper:
-                    signals.append(-1)  # Overbought
-                elif last_price < bb_lower:
-                    signals.append(1)   # Oversold
-                else:
-                    # Inside bands, neutral
-                    signals.append(0)
-            
-            # Stochastic signal with safer handling
-            stoch_k_val = latest.get('STOCHk_14_3_3', None)
-            stoch_d_val = latest.get('STOCHd_14_3_3', None)
-            
-            stoch_k = self._ensure_float(stoch_k_val, None)
-            stoch_d = self._ensure_float(stoch_d_val, None)
-            
-            if pd.notna(stoch_k) and pd.notna(stoch_d):
-                if stoch_k > 80 and stoch_d > 80:
-                    signals.append(-1)  # Overbought
-                elif stoch_k < 20 and stoch_d < 20:
-                    signals.append(1)   # Oversold
-                elif stoch_k > stoch_d:
-                    signals.append(0.5)  # Bullish crossover
-                elif stoch_k < stoch_d:
-                    signals.append(-0.5)  # Bearish crossover
-                else:
-                    signals.append(0)   # Neutral
-        
-        # Calculate confidence based on signal agreement with safer handling
-        confidence = "Low"
-        
-        if signals:
-            try:
-                # Average the signals
-                avg_signal = sum(signals) / len(signals)
-                signal_std = np.std(signals) if len(signals) > 1 else 0
-                
-                # Higher agreement (lower std) means higher confidence
-                if signal_std < 0.5 and abs(avg_signal) > 0.3:
-                    confidence = "High"
-                elif signal_std < 0.8:
-                    confidence = "Medium"
-            except Exception as e:
-                logger.warning(f"Error calculating confidence: {e}, defaulting to 'Low'")
-        
-        # Determine timeframe signals with safer handling
-        short_signal = "Neutral"
-        medium_signal = "Neutral"
-        long_signal = "Neutral"
-        
-        # Focus on short-term signals with safer handling
-        if rsi is not None:
-            if rsi > 70:
-                short_signal = "Bearish"
-            elif rsi < 30:
-                short_signal = "Bullish"
-        
-        # Medium-term signals with safer handling 
-        if macd is not None and macd_signal is not None:
-            if macd > macd_signal:
-                medium_signal = "Bullish"
-            elif macd < macd_signal:
-                medium_signal = "Bearish"
-        
-        # Long-term signals: trend direction, moving averages
-        long_signal = direction
-        if direction == "Sideways":
-            long_signal = "Neutral"
-            
-        # Determine recommended action based on signals
-        action = "Hold"
-        if short_signal == "Bullish" and medium_signal == "Bullish":
-            action = "Buy"
-        elif short_signal == "Bearish" and medium_signal == "Bearish":
-            action = "Sell"
-        
-        # Format values for explanation with safer handling
-        slope_str = "N/A"
-        percent_change_str = "N/A"
-        adx_str = "N/A"
-        
-        try:
-            if pd.notna(slope):
-                slope_str = f"{slope:.6f}"
-        except:
-            pass
-            
-        try:
-            if pd.notna(percent_change):
-                percent_change_str = f"{percent_change:.2f}"
-        except:
-            pass
-            
-        try:
-            if pd.notna(adx):
-                adx_str = f"{adx:.2f}"
-        except:
-            pass
 
-        # Generate explanation text with handled NaN values
-        explanation = f"Trend direction determined by linear regression slope "
-        explanation += f"({slope_str}) and percent change ({percent_change_str}%). "
-        
-        if pd.notna(adx):
-            explanation += f"Trend strength based on ADX value of {adx_str}. "
-        else:
-            explanation += f"Trend strength estimated from price movement. "
-            
-        explanation += f"Signals derived from {len(signals)} technical indicators. "
-        
-        # Add signal summary
-        if len(signals) > 0:
-            bullish_count = sum(1 for s in signals if s > 0)
-            bearish_count = sum(1 for s in signals if s < 0)
-            neutral_count = len(signals) - bullish_count - bearish_count
-            
-            explanation += f"Signal breakdown: {bullish_count} bullish, {bearish_count} bearish, {neutral_count} neutral. "
-        
-        # Generate advanced trading recommendations if available
-        advanced_recommendation = None
-        try:
-            # Only import when needed to avoid circular imports
-            from src.services.trading_strategies import generate_trade_recommendation
-            advanced_recommendation = generate_trade_recommendation(self.data)
-            
-            # Use advanced recommendation for the action if confidence is higher
-            if (advanced_recommendation and 
-                advanced_recommendation.get('confidence') and 
-                confidence_level(advanced_recommendation['confidence']) > confidence_level(confidence)):
-                action = advanced_recommendation['action'].capitalize()
-                explanation += f"\nAdvanced analysis suggests {advanced_recommendation['strategy']} "
-                explanation += f"strategy with {advanced_recommendation['confidence']} confidence. "
-                
-                # Add market condition information
-                if 'market_condition' in advanced_recommendation:
-                    market_condition = advanced_recommendation['market_condition']
-                    if 'condition' in market_condition and 'sub_condition' in market_condition:
-                        explanation += f"Market condition: {market_condition['condition']} "
-                        explanation += f"({market_condition['sub_condition']}). "
-                
-                # Add entry/exit information if available
-                if 'entry_points' in advanced_recommendation and advanced_recommendation['entry_points']:
-                    entry_point = advanced_recommendation['entry_points'][0]
-                    if 'price' in entry_point and entry_point['price'] is not None:
-                        explanation += f"Suggested entry near {entry_point['price']:.2f}. "
-                
-                if 'exit_points' in advanced_recommendation:
-                    exit_points = advanced_recommendation['exit_points']
-                    if 'take_profit' in exit_points and exit_points['take_profit']:
-                        explanation += f"Target: {exit_points['take_profit'][0]:.2f}. "
-                    if 'stop_loss' in exit_points and exit_points['stop_loss'] is not None:
-                        explanation += f"Stop loss: {exit_points['stop_loss']:.2f}. "
-                
-                # Add risk information if available
-                if 'risk_assessment' in advanced_recommendation:
-                    risk = advanced_recommendation['risk_assessment']
-                    if 'risk_reward_ratio' in risk and risk['risk_reward_ratio'] is not None:
-                        explanation += f"Risk/Reward: {risk['risk_reward_ratio']:.2f}. "
-        except Exception as e:
-            logger.warning(f"Error generating advanced recommendations: {e}")
-            advanced_recommendation = None
-        
-        # Construct the full trend analysis dictionary
-        trend_analysis = {
-            'direction': direction,
-            'strength': strength,
-            'confidence': confidence,
-            'signals': {
-                'short_term': short_signal,
-                'medium_term': medium_signal,
-                'long_term': long_signal,
-                'action': action
-            },
-            'explanation': explanation,
-            'values': {
-                'slope': self._ensure_float(slope, 0.0),
-                'percent_change': self._ensure_float(percent_change, 0.0),
-                'adx': self._ensure_float(adx, 0.0),
-                'signal_count': len(signals)
-            }
+        logger.info(f"Generating summary for {self.symbol}")
+
+        price_summary = self._get_price_summary()
+        volatility_summary = self._get_volatility_summary()
+        trend_summary = self._get_trend_summary()
+        sr_summary = self._get_support_resistance_summary()
+        volume_summary = self._get_volume_analysis_summary()
+        indicators_summary = self._summarize_indicators()
+        confluence_note = indicators_summary.get("overall_indicator_confluence", {}).get("note", "")
+
+        general_overview = (
+            f"Analysis for {self.symbol} ({self.timeframe}): "
+            f"Current price is {price_summary.get('current_price', 'N/A')}. "
+            f"The overall trend is considered '{trend_summary.get('overall_trend', 'N/A')}'. "
+            f"Volatility is {volatility_summary.get('volatility_level', 'N/A')} "
+            f"({volatility_summary.get('annualized_volatility_pct', 'N/A')}). "
+            f"Indicator confluence: {confluence_note}"
+        )
+
+        summary_dict = {
+            "general_overview": general_overview,
+            "price_snapshot": price_summary,
+            "trend_analysis": trend_summary,
+            "volatility_analysis": volatility_summary,
+            "support_resistance": sr_summary,
+            "volume_analysis": volume_summary,
+            "key_indicators": indicators_summary,
         }
-        
-        # Add advanced recommendation if available
-        if advanced_recommendation:
-            trend_analysis['advanced_recommendation'] = advanced_recommendation
-        
-        return trend_analysis
+        self.analysis_results.update(summary_dict)
+        return summary_dict
+
+    def _determine_trend(self) -> Dict[str, Any]:
+        """
+        Determine the market trend using multiple indicators, with educational ADX interpretation.
+        """
+        if (
+            self.data is None or self.data.empty or len(self.data) < 20
+        ):
+            return {
+                "overall_trend": "undetermined",
+                "confidence": "low",
+                "details": "Insufficient data for trend determination.",
+                "explanation": "Not enough data to determine trend."
+            }
+
+        signals = []
+        details = []
+        explanations = []
+
+        sma_short_col = next(
+            (
+                col
+                for col in self.data.columns
+                if col.startswith("SMA_") and int(col.split("_")[1]) <= 20
+            ),
+            None,
+        )
+        sma_medium_col = next(
+            (
+                col
+                for col in self.data.columns
+                if col.startswith("SMA_") and 20 < int(col.split("_")[1]) <= 50
+            ),
+            None,
+        )
+        sma_long_col = next(
+            (
+                col
+                for col in self.data.columns
+                if col.startswith("SMA_") and int(col.split("_")[1]) > 50
+            ),
+            None,
+        )
+
+        current_price = self.data["close"].iloc[-1]
+
+        if sma_short_col and sma_medium_col:
+            sma_short = self.data[sma_short_col].iloc[-1]
+            sma_medium = self.data[sma_medium_col].iloc[-1]
+            if pd.notna(sma_short) and pd.notna(sma_medium):
+                if current_price > sma_short > sma_medium:
+                    signals.append("bullish")
+                    details.append(
+                        f"Price above {sma_short_col} ({sma_short:.2f}) and {sma_medium_col} ({sma_medium:.2f}); {sma_short_col} above {sma_medium_col} (Bullish MA alignment)."
+                    )
+                    explanations.append("Bullish trend: Price is above both short and medium-term moving averages, and the short MA is above the medium MA, indicating upward momentum.")
+                elif current_price < sma_short < sma_medium:
+                    signals.append("bearish")
+                    details.append(
+                        f"Price below {sma_short_col} ({sma_short:.2f}) and {sma_medium_col} ({sma_medium:.2f}); {sma_short_col} below {sma_medium_col} (Bearish MA alignment)."
+                    )
+                    explanations.append("Bearish trend: Price is below both short and medium-term moving averages, and the short MA is below the medium MA, indicating downward momentum.")
+                else:
+                    signals.append("mixed")
+                    details.append(
+                        f"Price ({current_price:.2f}) shows mixed signals with {sma_short_col} ({sma_short:.2f}) and {sma_medium_col} ({sma_medium:.2f})."
+                    )
+                    explanations.append("Mixed trend: Price and moving averages do not show a clear alignment, suggesting indecision or transition.")
+
+        # MACD
+        macd_line_col = next(
+            (
+                col
+                for col in self.data.columns
+                if col.upper().startswith("MACD_")
+                and not col.upper().endswith("_H")
+                and not col.upper().endswith("_S")
+            ),
+            None,
+        )
+        macd_signal_col = next(
+            (col for col in self.data.columns if col.upper().startswith("MACDS_")), None
+        )
+        macd_hist_col = next(
+            (col for col in self.data.columns if col.upper().startswith("MACDH_")), None
+        )
+
+        if macd_line_col and macd_signal_col and macd_hist_col:
+            macd_line = self.data[macd_line_col].iloc[-1]
+            macd_signal_val = self.data[macd_signal_col].iloc[-1]
+            macd_hist = self.data[macd_hist_col].iloc[-1]
+            if (
+                pd.notna(macd_line)
+                and pd.notna(macd_signal_val)
+                and pd.notna(macd_hist)
+            ):
+                if macd_line > macd_signal_val and macd_hist > 0:
+                    signals.append("bullish")
+                    details.append(
+                        f"MACD line ({macd_line:.2f}) above signal ({macd_signal_val:.2f}), histogram positive ({macd_hist:.2f}) (Bullish MACD)."
+                    )
+                    explanations.append("Bullish MACD: MACD line is above the signal line and histogram is positive, indicating bullish momentum.")
+                elif macd_line < macd_signal_val and macd_hist < 0:
+                    signals.append("bearish")
+                    details.append(
+                        f"MACD line ({macd_line:.2f}) below signal ({macd_signal_val:.2f}), histogram negative ({macd_hist:.2f}) (Bearish MACD)."
+                    )
+                    explanations.append("Bearish MACD: MACD line is below the signal line and histogram is negative, indicating bearish momentum.")
+                else:
+                    signals.append("mixed")
+                    details.append(
+                        f"MACD ({macd_line:.2f}) and signal ({macd_signal_val:.2f}) show mixed/crossing signals."
+                    )
+                    explanations.append("Mixed MACD: MACD and signal line are close or crossing, suggesting indecision.")
+
+        # ADX (Trend Strength)
+        adx_col = next((col for col in self.data.columns if "ADX" in col.upper()), None)
+        adx_strength = "weak"
+        adx_value = None
+        if adx_col:
+            adx_value = self.data[adx_col].iloc[-1]
+            if pd.notna(adx_value):
+                if adx_value > 25:
+                    adx_strength = "strong"
+                    details.append(f"ADX at {adx_value:.2f} indicates a strong trend.")
+                    explanations.append("ADX above 25: Indicates a strong trend, confirming the reliability of other trend signals.")
+                elif adx_value > 20:
+                    adx_strength = "developing"
+                    details.append(f"ADX at {adx_value:.2f} suggests a developing trend.")
+                    explanations.append("ADX between 20 and 25: Indicates a trend is developing, but not yet strong.")
+                else:
+                    adx_strength = "weak"
+                    details.append(f"ADX at {adx_value:.2f} suggests a weak or non-trending market.")
+                    explanations.append("ADX below 20: Indicates a weak or non-existent trend, so trend signals are less reliable.")
+                    signals.append("neutral")
+
+        # Determine overall trend
+        bullish_count = signals.count("bullish")
+        bearish_count = signals.count("bearish")
+
+        overall_trend = "neutral"
+        confidence = "low"
+
+        if bullish_count > bearish_count:
+            overall_trend = f"bullish ({adx_strength} strength)"
+            confidence = "medium" if bullish_count >= len(signals) * 0.6 else "low"
+            if adx_col and adx_value and adx_value > 25:
+                confidence = "high"
+        elif bearish_count > bullish_count:
+            overall_trend = f"bearish ({adx_strength} strength)"
+            confidence = "medium" if bearish_count >= len(signals) * 0.6 else "low"
+            if adx_col and adx_value and adx_value > 25:
+                confidence = "high"
+        elif not signals:
+            overall_trend = "undetermined"
+            details.append("Not enough primary trend indicators available.")
+            explanations.append("Not enough primary trend indicators available to determine trend.")
+        else:
+            overall_trend = "mixed"
+            details.append("Indicators provide mixed trend signals.")
+            explanations.append("Indicators are mixed, so no clear trend is present.")
+
+        return {
+            "overall_trend": overall_trend,
+            "confidence": confidence,
+            "signal_counts": {
+                "bullish": bullish_count,
+                "bearish": bearish_count,
+                "mixed_neutral": signals.count("mixed") + signals.count("neutral"),
+            },
+            "details": details,
+            "num_signals_considered": len(signals),
+            "adx_strength": adx_strength,
+            "explanation": "; ".join(explanations)
+        }
 
     def _summarize_indicators(self) -> Dict[str, Any]:
         """
-        Summarize the technical indicators.
-        
-        Returns:
-            Dict with interpretations and values of technical indicators:
-            - 'rsi': RSI data (interpretation and value)
-            - 'macd': MACD data (interpretation and values)
-            - 'bollinger': Bollinger Bands data (interpretation and values)
-            - 'adx': ADX data (interpretation and value)
-            - 'stochastic': Stochastic Oscillator data (interpretation and values)
-            - 'cci': CCI data (interpretation and value)
-            - 'atr': ATR data (interpretation and value)
-            - 'obv': OBV data (interpretation and value)
+        Create a summary of key technical indicators and their signals, with confluence and educational explanations.
         """
-        # Initialize the result dictionary to store all indicator data
-        result = {}
-        
-        # Ensure data is available
         if self.data is None or self.data.empty:
-            logger.warning(f"No data available for {self.symbol}, using default indicator values")
-            return self._get_default_indicators()
-        
-        # Get the latest values
-        try:
-            latest = self.data.iloc[-1]
-        except Exception as e:
-            logger.error(f"Error accessing latest data for {self.symbol}: {e}")
-            return self._get_default_indicators()
-        
-        # Get the window size used for this timeframe
-        window_size = self.trading_style['window_sizes'][0]  # Use the first window size
-        
-        # Initialize close variable explicitly with better error handling
-        close = None
-        try:
-            close = latest.get('close', None)
-            if pd.isna(close):
-                # Try to find a valid close price
-                close_values = self.data['close'].dropna()
-                if not close_values.empty:
-                    close = close_values.iloc[-1]
-                    logger.warning(f"Latest close is NaN for {self.symbol}, using last valid close: {close}")
-                else:
-                    # If no valid close prices, try other price columns
-                    for col in ['open', 'high', 'low']:
-                        if col in latest and not pd.isna(latest[col]):
-                            close = latest[col]
-                            logger.warning(f"No valid close prices for {self.symbol}, using {col}: {close}")
-                            break
-        except Exception as e:
-            logger.error(f"Error getting close price for {self.symbol}: {e}")
-        
-        if close is None or pd.isna(close):
-            logger.warning(f"Could not determine a valid price for {self.symbol}, using 0.0")
-            close = 0.0
-        
-        # RSI interpretation and value with better fallback handling
-        rsi = latest.get('rsi_14', None)
-        if pd.notna(rsi):
-            # Valid RSI value
-            if rsi > 70:
-                rsi_interp = "Overbought"
-            elif rsi < 30:
-                rsi_interp = "Oversold"
-            else:
-                rsi_interp = "Neutral"
-            
-            # Ensure value is a number, not an array or other structure
-            if isinstance(rsi, (np.ndarray, list, pd.Series, pd.DataFrame)):
-                try:
-                    rsi = float(rsi.iloc[0] if hasattr(rsi, 'iloc') else rsi[0])
-                except (IndexError, TypeError, ValueError):
-                    logger.warning(f"RSI value for {self.symbol} couldn't be converted to float, defaulting to 50")
-                    rsi = 50.0
-        else:
-            # Use fallback value (neutral RSI = 50)
-            logger.warning(f"RSI value is None or NaN for {self.symbol}, defaulting to 'Neutral' (50)")
-            rsi_interp = "Neutral"
-            rsi = 50.0
-        
-        # MACD interpretation and values with better fallback handling
-        macd = latest.get('MACD_12_26_9', None)
-        macd_signal = latest.get('MACDs_12_26_9', None)
-        macd_hist = latest.get('MACDh_12_26_9', None)
-        
-        # Initialize with default values
-        macd_values = {'line': 0.0, 'signal': 0.0, 'histogram': 0.0}
-        
-        if pd.notna(macd) and pd.notna(macd_signal):
-            # Valid MACD values
-            if macd > macd_signal and macd > 0:
-                macd_interp = "Bullish"
-            elif macd < macd_signal and macd < 0:
-                macd_interp = "Bearish"
-            else:
-                macd_interp = "Neutral"
-            
-            # Update the values dictionary with actual values
-            macd_values['line'] = self._ensure_float(macd, 0.0)
-            macd_values['signal'] = self._ensure_float(macd_signal, 0.0)
-            if pd.notna(macd_hist):
-                macd_values['histogram'] = self._ensure_float(macd_hist, 0.0)
-        else:
-            # Use fallback values
-            logger.warning(f"MACD values are None or NaN for {self.symbol}, defaulting to 'Neutral' (0)")
-            macd_interp = "Neutral"
-        
-        # Bollinger Bands interpretation with enhanced error handling
-        logger.debug(f"Using window_size={window_size} for Bollinger Bands calculation")
-        bb_lower_key = f'BBL_{window_size}_2.0'
-        bb_middle_key = f'BBM_{window_size}_2.0'
-        bb_upper_key = f'BBU_{window_size}_2.0'
-        
-        bb_lower = latest.get(bb_lower_key, None)
-        bb_middle = latest.get(bb_middle_key, None)
-        bb_upper = latest.get(bb_upper_key, None)
-        
-        # Initialize with default values
-        bb_values = {
-            'upper': close * 1.02 if close else 0.0,  # Default: price + 2%
-            'middle': close if close else 0.0,        # Default: price
-            'lower': close * 0.98 if close else 0.0,  # Default: price - 2%
-            'close': close if close else 0.0,
-            'percent': 0.0                            # Default: neutral (0%)
-        }
-        
-        if pd.notna(bb_lower) and pd.notna(bb_upper) and pd.notna(close):
-            # Valid Bollinger Bands values
-            if close > bb_upper:
-                bb_interp = "Overbought"
-            elif close < bb_lower:
-                bb_interp = "Oversold"
-            else:
-                bb_interp = "Neutral"
-            
-            # Update the values dictionary with actual values
-            bb_values['upper'] = self._ensure_float(bb_upper, bb_values['upper'])
-            bb_values['lower'] = self._ensure_float(bb_lower, bb_values['lower'])
-            
-            # Calculate percentage distance from the middle band
-            if pd.notna(bb_middle) and float(bb_middle) != 0:
-                bb_percent = ((close - float(bb_middle)) / float(bb_middle)) * 100
-                bb_values['middle'] = self._ensure_float(bb_middle, close)
-                bb_values['percent'] = self._ensure_float(bb_percent, 0.0)
-        else:
-            # Use fallback values
-            logger.warning(f"Bollinger Bands values are None or NaN for {self.symbol}, defaulting to 'Neutral'")
-            bb_interp = "Neutral"
-        
-        # ADX interpretation and value with better fallback handling
-        adx = latest.get('ADX_14', None)
-        _dmp = latest.get('DMP_14', None)
-        _dmn = latest.get('DMN_14', None)
-        
-        if pd.notna(adx):
-            # Valid ADX value
-            if adx > 25:
-                adx_interp = "Strong Trend"
-            elif adx > 15:
-                adx_interp = "Moderate Trend"
-            else:
-                adx_interp = "Weak Trend"
-            
-            adx = self._ensure_float(adx, 15.0)
-        else:
-            # Use fallback value (weak trend ADX = 15)
-            logger.warning(f"ADX value is None or NaN for {self.symbol}, defaulting to 'Weak Trend' (15)")
-            adx_interp = "Weak Trend"
-            adx = 15.0
-        
-        # Stochastic Oscillator with better fallback handling
-        stoch_k = latest.get('STOCHk_14_3_3', None)
-        stoch_d = latest.get('STOCHd_14_3_3', None)
-        
-        # Initialize with default values
-        stoch_values = {'k': 50.0, 'd': 50.0}  # Neutral values
-        
-        if pd.notna(stoch_k) and pd.notna(stoch_d):
-            # Valid Stochastic values
-            if stoch_k > 80 and stoch_d > 80:
-                stoch_interp = "Overbought"
-            elif stoch_k < 20 and stoch_d < 20:
-                stoch_interp = "Oversold"
-            elif stoch_k > stoch_d:
-                stoch_interp = "Bullish Crossover"
-            elif stoch_k < stoch_d:
-                stoch_interp = "Bearish Crossover"
-            else:
-                stoch_interp = "Neutral"
-            
-            # Update the values dictionary with actual values
-            stoch_values['k'] = self._ensure_float(stoch_k, 50.0)
-            stoch_values['d'] = self._ensure_float(stoch_d, 50.0)
-        else:
-            # Use fallback values
-            logger.warning(f"Stochastic values are None or NaN for {self.symbol}, defaulting to 'Neutral' (50)")
-            stoch_interp = "Neutral"
-        
-        # CCI interpretation and value with better fallback handling
-        cci = latest.get('CCI_20', None)
-        
-        if pd.notna(cci):
-            # Valid CCI value
-            if cci > 100:
-                cci_interp = "Overbought"
-            elif cci < -100:
-                cci_interp = "Oversold"
-            else:
-                cci_interp = "Neutral"
-            
-            cci = self._ensure_float(cci, 0.0)
-        else:
-            # Use fallback value (neutral CCI = 0)
-            logger.warning(f"CCI value is None or NaN for {self.symbol}, defaulting to 'Neutral' (0)")
-            cci_interp = "Neutral"
-            cci = 0.0
-        
-        # ATR interpretation and value with better fallback handling
-        atr = latest.get('ATR_14', None)
-        
-        # Default ATR interpretation and value
-        atr_interp = "Unavailable"
-        atr_value = close * 0.01 if close else 0.0  # Default to 1% of price
-        
-        if pd.notna(atr) and pd.notna(close) and close > 0:
-            # Valid ATR value
-            atr_value = self._ensure_float(atr, atr_value)
-            
-            # Calculate ATR as percentage of price
-            atr_pct = (atr_value / close) * 100
-            
-            if atr_pct > 3:
-                atr_interp = "High Volatility"
-            elif atr_pct > 1.5:
-                atr_interp = "Moderate Volatility"
-            else:
-                atr_interp = "Low Volatility"
-        else:
-            # Use fallback value
-            logger.warning(f"ATR value or close price is None or NaN for {self.symbol}, defaulting to 'Low Volatility'")
-            atr_interp = "Low Volatility"
-        
-        # OBV interpretation and value with better fallback handling
-        obv = latest.get('OBV', None)
-        
-        # Default OBV interpretation and value
-        obv_interp = "Neutral"
-        obv_value = 0.0
-        
-        if pd.notna(obv) and len(self.data) > 1:
-            # Valid OBV value
-            obv_value = self._ensure_float(obv, 0.0)
-            
-            # Compare with previous OBV if possible
-            try:
-                if 'OBV' in self.data.columns and 'close' in self.data.columns:
-                    prev_obv = self.data['OBV'].iloc[-2]
-                    prev_close = self.data['close'].iloc[-2]
-                    
-                    if not pd.isna(prev_obv) and not pd.isna(prev_close):
-                        if obv_value > prev_obv and close > prev_close:
-                            obv_interp = "Confirming Uptrend"
-                        elif obv_value < prev_obv and close < prev_close:
-                            obv_interp = "Confirming Downtrend"
-                        elif obv_value < prev_obv and close > prev_close:
-                            obv_interp = "Divergence (Bearish)"
-                        elif obv_value > prev_obv and close < prev_close:
-                            obv_interp = "Divergence (Bullish)"
+            return {"error": "Data not available for indicator summary."}
+
+        indicators_summary = {}
+        default_indicators_config = self._get_default_indicators()
+        confluence_signals = []
+        for key, config in default_indicators_config.items():
+            indicator_data = {"name": config.get("display_name", key.upper())}
+            values = {}
+            explanation = ""
+            if key == "sma" and "lengths" in config.get("params", {}):
+                for length in config["params"]["lengths"]:
+                    col_name = f"SMA_{length}"
+                    if col_name in self.data.columns:
+                        ma_val = self.data[col_name].iloc[-1]
+                        price = self.data["close"].iloc[-1]
+                        values[f"SMA {length}"] = f"{ma_val:.2f}"
+                        if price > ma_val:
+                            values[f"Signal {length}"] = "Price above MA (bullish)"
+                            confluence_signals.append("bullish")
                         else:
-                            obv_interp = "Neutral"
-            except Exception as e:
-                logger.warning(f"Error comparing OBV values for {self.symbol}: {e}, defaulting to 'Neutral'")
-        else:
-            # Use fallback value
-            logger.warning(f"OBV value is None or NaN for {self.symbol}, defaulting to 'Neutral' (0)")
-        
-        # SMA interpretation and values with better fallback handling
-        sma_key = f'sma_{window_size}'
-        
-        # Default SMA interpretation and values
-        sma_interp = "Unavailable"
-        sma_values = {
-            'sma': close if close else 0.0,  # Default to current price
-            'close': close if close else 0.0,
-            'position': 'Unknown'
-        }
-        
-        # Get SMA value with error handling
-        try:
-            sma = None
-            if sma_key in latest:
-                sma = latest.get(sma_key, None)
-                if pd.notna(sma):
-                    sma = self._ensure_float(sma, close)
-                
-            if pd.notna(sma) and pd.notna(close) and close > 0:
-                # Valid SMA value
-                sma_values['sma'] = sma
-                
-                # Check if we have enough data for trend calculation
-                try:
-                    if len(self.data) > 10 and sma_key in self.data.columns:
-                        # Calculate SMA trend by comparing with SMA from 10 periods ago
-                        historical_index = -11 if len(self.data) > 10 else 0
-                        historical_sma = self.data[sma_key].iloc[historical_index]
-                        
-                        # Calculate percentage difference between price and SMA
-                        price_sma_diff_pct = ((close - sma) / sma) * 100
-                        
-                        # Calculate SMA trend as percentage change
-                        sma_trend_pct = 0
-                        if pd.notna(historical_sma) and historical_sma > 0:
-                            sma_trend_pct = ((sma - historical_sma) / historical_sma) * 100
-                        
-                        # Determine price position relative to SMA
-                        if close > sma:
-                            sma_values['position'] = 'Above'
-                            if sma_trend_pct > 1 or price_sma_diff_pct > 3:
-                                sma_interp = "Bullish"
-                            elif -1 <= sma_trend_pct <= 1 and abs(price_sma_diff_pct) <= 3:
-                                sma_interp = "Neutral"
-                            else:
-                                sma_interp = "Mildly Bullish"
+                            values[f"Signal {length}"] = "Price below MA (bearish)"
+                            confluence_signals.append("bearish")
+                explanation = "Price above a moving average is generally bullish, below is bearish. Multiple MAs in agreement strengthen the signal."
+            elif key == "ema" and "lengths" in config.get("params", {}):
+                for length in config["params"]["lengths"]:
+                    col_name = f"EMA_{length}"
+                    if col_name in self.data.columns:
+                        ma_val = self.data[col_name].iloc[-1]
+                        price = self.data["close"].iloc[-1]
+                        values[f"EMA {length}"] = f"{ma_val:.2f}"
+                        if price > ma_val:
+                            values[f"Signal {length}"] = "Price above EMA (bullish)"
+                            confluence_signals.append("bullish")
                         else:
-                            sma_values['position'] = 'Below'
-                            if sma_trend_pct < -1 or price_sma_diff_pct < -3:
-                                sma_interp = "Bearish"
-                            elif -1 <= sma_trend_pct <= 1 and abs(price_sma_diff_pct) <= 3:
-                                sma_interp = "Neutral"
-                            else:
-                                sma_interp = "Mildly Bearish"
+                            values[f"Signal {length}"] = "Price below EMA (bearish)"
+                            confluence_signals.append("bearish")
+                explanation = "Price above an EMA is generally bullish, below is bearish. Multiple EMAs in agreement strengthen the signal."
+            elif key == "rsi":
+                col_name = "RSI_14"
+                if col_name in self.data.columns:
+                    rsi_val = self.data[col_name].iloc[-1]
+                    values["RSI (14)"] = f"{rsi_val:.2f}"
+                    if rsi_val > 70:
+                        values["Signal"] = "Overbought"
+                        confluence_signals.append("bearish")
+                        explanation = "RSI above 70 is considered overbought, which can signal a potential reversal or pullback."
+                    elif rsi_val < 30:
+                        values["Signal"] = "Oversold"
+                        confluence_signals.append("bullish")
+                        explanation = "RSI below 30 is considered oversold, which can signal a potential upward reversal."
                     else:
-                        # Not enough historical data, do basic position check
-                        if close > sma:
-                            sma_values['position'] = 'Above'
-                            sma_interp = "Above (Potentially Bullish)"
-                        else:
-                            sma_values['position'] = 'Below'
-                            sma_interp = "Below (Potentially Bearish)"
-                except Exception as e:
-                    logger.warning(f"Error calculating SMA trend for {self.symbol}: {e}")
-                    if close > sma:
-                        sma_values['position'] = 'Above'
-                        sma_interp = "Above SMA"
+                        values["Signal"] = "Neutral"
+                        confluence_signals.append("neutral")
+                else:
+                    values["Signal"] = "Neutral"
+                    confluence_signals.append("neutral")
+            elif key == "macd":
+                macd_line_col = next(
+                    (
+                        c
+                        for c in self.data.columns
+                        if c.upper().startswith("MACD_")
+                        and not c.upper().endswith("_H")
+                        and not c.upper().endswith("_S")
+                    ),
+                    "MACD_12_26_9",
+                )
+                macd_signal_col = next(
+                    (c for c in self.data.columns if c.upper().startswith("MACDS_")),
+                    "MACDS_12_26_9",
+                )
+                macd_hist_col = next(
+                    (c for c in self.data.columns if c.upper().startswith("MACDH_")),
+                    "MACDH_12_26_9",
+                )
+                if (
+                    macd_line_col in self.data.columns
+                    and macd_signal_col in self.data.columns
+                    and macd_hist_col in self.data.columns
+                ):
+                    macd_line = self.data[macd_line_col].iloc[-1]
+                    macd_signal = self.data[macd_signal_col].iloc[-1]
+                    macd_hist = self.data[macd_hist_col].iloc[-1]
+                    values["MACD Line"] = f"{macd_line:.2f}"
+                    values["Signal Line"] = f"{macd_signal:.2f}"
+                    values["Histogram"] = f"{macd_hist:.2f}"
+                    if macd_line > macd_signal and macd_hist > 0:
+                        values["Signal"] = "Bullish Crossover"
+                        confluence_signals.append("bullish")
+                        explanation = "MACD line above the signal line with a positive histogram is bullish."
+                    elif macd_line < macd_signal and macd_hist < 0:
+                        values["Signal"] = "Bearish Crossover"
+                        confluence_signals.append("bearish")
+                        explanation = "MACD line below the signal line with a negative histogram is bearish."
                     else:
-                        sma_values['position'] = 'Below'
-                        sma_interp = "Below SMA"
-            else:
-                # Use fallback value
-                logger.warning(f"SMA value or close price is None or NaN for {self.symbol}, defaulting to 'Neutral'")
-                sma_interp = "Neutral"
-        except Exception as e:
-            logger.error(f"Error interpreting SMA for {self.symbol}: {e}")
-        
-        # Create structured results with both interpretations and values
-        result = {
-            'rsi': {
-                'interpretation': rsi_interp,
-                'value': round(rsi, 2)
-            },
-            'macd': {
-                'interpretation': macd_interp,
-                'values': {
-                    'line': round(macd_values['line'], 4),
-                    'signal': round(macd_values['signal'], 4),
-                    'histogram': round(macd_values['histogram'], 4)
-                }
-            },
-            'bollinger': {
-                'interpretation': bb_interp,
-                'values': {
-                    'upper': round(bb_values['upper'], 2),
-                    'middle': round(bb_values['middle'], 2),
-                    'lower': round(bb_values['lower'], 2),
-                    'close': round(bb_values['close'], 2),
-                    'percent': round(bb_values['percent'], 2)
-                }
-            },
-            'sma': {
-                'interpretation': sma_interp,
-                'values': {
-                    'sma': round(sma_values['sma'], 2),
-                    'close': round(sma_values['close'], 2),
-                    'position': sma_values['position']
-                }
-            },
-            'adx': {
-                'interpretation': adx_interp,
-                'value': round(adx, 2)
-            },
-            'stochastic': {
-                'interpretation': stoch_interp,
-                'values': {
-                    'k': round(stoch_values['k'], 2),
-                    'd': round(stoch_values['d'], 2)
-                }
-            },
-            'cci': {
-                'interpretation': cci_interp,
-                'value': round(cci, 2)
-            },
-            'atr': {
-                'interpretation': atr_interp,
-                'value': round(atr_value, 2)
-            },
-            'obv': {
-                'interpretation': obv_interp,
-                'value': obv_value
-            }
-        }
-        
-        # Add Ichimoku Cloud interpretation
-        try:
-            # Check if necessary Ichimoku components are available
-            tenkan_key = 'ITS_9'  # Tenkan-sen (Conversion Line)
-            kijun_key = 'IKS_26'  # Kijun-sen (Base Line)
-            senkou_a_key = 'ISA_9'  # Senkou Span A (Leading Span A)
-            senkou_b_key = 'ISB_26'  # Senkou Span B (Leading Span B)
-            chikou_key = 'ICS_26'  # Chikou Span (Lagging Span)
-            
-            # Get values from the dataframe with safer access
-            tenkan_val = self._ensure_float(latest.get(tenkan_key, None), close)
-            kijun_val = self._ensure_float(latest.get(kijun_key, None), close)
-            senkou_a_val = self._ensure_float(latest.get(senkou_a_key, None), close)
-            senkou_b_val = self._ensure_float(latest.get(senkou_b_key, None), close * 0.98)
-            chikou_val = self._ensure_float(latest.get(chikou_key, None), close)
-            
-            # Check for NaN values
-            if (pd.isna(tenkan_val) or pd.isna(kijun_val) or 
-                pd.isna(senkou_a_val) or pd.isna(senkou_b_val)):
-                logger.debug("Some Ichimoku values are NaN, using fallback interpretation")
-                ichimoku_interp = "Neutral"
-                result['ichimoku'] = {
-                    'interpretation': ichimoku_interp,
-                    'values': {
-                        'tenkan_sen': tenkan_val,
-                        'kijun_sen': kijun_val,
-                        'senkou_span_a': senkou_a_val,
-                        'senkou_span_b': senkou_b_val,
-                        'chikou_span': chikou_val,
-                        'cloud_bullish': False,
-                        'position': "Neutral",
-                        'tk_cross': "Neutral"
-                    }
-                }
-            else:
-                # Price position relative to cloud
-                cloud_bullish = senkou_a_val > senkou_b_val
-                
-                # Is price above or below the cloud?
-                price_above_cloud = close > max(senkou_a_val, senkou_b_val) if pd.notna(close) else False
-                price_below_cloud = close < min(senkou_a_val, senkou_b_val) if pd.notna(close) else False
-                
-                # Tenkan-Kijun Cross
-                tk_cross = "Neutral"
-                if tenkan_val > kijun_val:
-                    tk_cross = "Bullish"
-                elif tenkan_val < kijun_val:
-                    tk_cross = "Bearish"
-                
-                # Overall position
-                position = "Neutral"
-                if price_above_cloud:
-                    position = "Bullish"
-                elif price_below_cloud:
-                    position = "Bearish"
-                
-                # Determine the overall Ichimoku interpretation
-                if price_above_cloud and tenkan_val > kijun_val and cloud_bullish:
-                    ichimoku_interp = "Strong Bullish"
-                elif price_below_cloud and tenkan_val < kijun_val and not cloud_bullish:
-                    ichimoku_interp = "Strong Bearish"
-                elif price_above_cloud or (tenkan_val > kijun_val and cloud_bullish):
-                    ichimoku_interp = "Bullish"
-                elif price_below_cloud or (tenkan_val < kijun_val and not cloud_bullish):
-                    ichimoku_interp = "Bearish"
-                else:
-                    ichimoku_interp = "Neutral"
-                
-                # Add Ichimoku to the result
-                result['ichimoku'] = {
-                    'interpretation': ichimoku_interp,
-                    'values': {
-                        'tenkan_sen': tenkan_val,
-                        'kijun_sen': kijun_val,
-                        'senkou_span_a': senkou_a_val,
-                        'senkou_span_b': senkou_b_val,
-                        'chikou_span': chikou_val,
-                        'cloud_bullish': cloud_bullish,
-                        'position': position,
-                        'tk_cross': tk_cross
-                    }
-                }
-        except Exception as e:
-            logger.debug(f"Error interpreting Ichimoku Cloud: {e}")
-            # Default Ichimoku interpretation when there's an error
-            ichimoku_interp = "Neutral"
-            result['ichimoku'] = {
-                'interpretation': ichimoku_interp,
-                'values': {
-                    'tenkan_sen': close,
-                    'kijun_sen': close,
-                    'senkou_span_a': close,
-                    'senkou_span_b': close * 0.98,
-                    'chikou_span': close,
-                    'cloud_bullish': False,
-                    'position': "Neutral",
-                    'tk_cross': "Neutral"
-                }
-            }
-        
-        # Backward compatibility - add string interpretations as top-level keys
-        indicator_interpretations = {
-            'rsi': rsi_interp,
-            'macd': macd_interp,
-            'bollinger': bb_interp,
-            'sma': sma_interp,
-            'adx': adx_interp,
-            'stochastic': stoch_interp,
-            'cci': cci_interp,
-            'atr': atr_interp,
-            'obv': obv_interp
-        }
-        
-        # Add Ichimoku to interpretations if available
-        if 'ichimoku' in result:
-            indicator_interpretations['ichimoku'] = result['ichimoku']['interpretation']
-        
-        # Always return the structured format with interpretations included
-        result.update({
-            # Include a flat dictionary of interpretations for backward compatibility
-            'interpretations': indicator_interpretations
-        })
-        
-        return result
-    
-    def _ensure_float(self, value, default=0.0):
-        """
-        Helper method to ensure a value is a float, handling various data types.
-        
-        Args:
-            value: The value to convert to float
-            default: Default value to use if conversion fails
-            
-        Returns:
-            Float value or default if conversion fails
-        """
-        if value is None or pd.isna(value):
-            return default
-            
-        try:
-            # Handle arrays, series, etc.
-            if isinstance(value, (np.ndarray, list, pd.Series, pd.DataFrame)):
-                # For array-like objects, try to get the first element
-                if hasattr(value, 'iloc'):
-                    return float(value.iloc[0])
-                elif hasattr(value, 'item') and value.size == 1:
-                    return float(value.item())
-                elif len(value) > 0:
-                    return float(value[0])
-                else:
-                    return default
-            else:
-                # For scalar values, convert directly
-                return float(value)
-        except (TypeError, ValueError, IndexError, AttributeError):
-            return default
-    
-    def _get_default_indicators(self):
-        """
-        Provide default indicator values and interpretations when no data is available.
-        
-        Returns:
-            Dict with default indicator interpretations and values
-        """
-        # Create a default result dictionary
-        result = {
-            'rsi': {
-                'interpretation': "Neutral",
-                'value': 50.0
-            },
-            'macd': {
-                'interpretation': "Neutral",
-                'values': {
-                    'line': 0.0,
-                    'signal': 0.0,
-                    'histogram': 0.0
-                }
-            },
-            'bollinger': {
-                'interpretation': "Neutral",
-                'values': {
-                    'upper': 110.0,
-                    'middle': 100.0,
-                    'lower': 90.0,
-                    'close': 100.0,
-                    'percent': 0.0
-                }
-            },
-            'sma': {
-                'interpretation': "Neutral",
-                'values': {
-                    'sma': 100.0,
-                    'close': 100.0,
-                    'position': 'Unknown'
-                }
-            },
-            'adx': {
-                'interpretation': "Weak Trend",
-                'value': 15.0
-            },
-            'stochastic': {
-                'interpretation': "Neutral",
-                'values': {
-                    'k': 50.0,
-                    'd': 50.0
-                }
-            },
-            'cci': {
-                'interpretation': "Neutral",
-                'value': 0.0
-            },
-            'atr': {
-                'interpretation': "Low Volatility",
-                'value': 1.0
-            },
-            'obv': {
-                'interpretation': "Neutral",
-                'value': 0.0
-            },
-            'ichimoku': {
-                'interpretation': "Neutral",
-                'values': {
-                    'tenkan_sen': 100.0,
-                    'kijun_sen': 100.0,
-                    'senkou_span_a': 100.0,
-                    'senkou_span_b': 98.0,
-                    'chikou_span': 100.0,
-                    'cloud_bullish': False,
-                    'position': "Neutral",
-                    'tk_cross': "Neutral"
-                }
-            }
-        }
-        
-        # Add flat interpretations dictionary for backward compatibility
-        result['interpretations'] = {
-            'rsi': "Neutral",
-            'macd': "Neutral",
-            'bollinger': "Neutral",
-            'sma': "Neutral",
-            'adx': "Weak Trend",
-            'stochastic': "Neutral",
-            'cci': "Neutral",
-            'atr': "Low Volatility",
-            'obv': "Neutral",
-            'ichimoku': "Neutral"
-        }
-        
-        return result
-
-    def present_cases(self) -> Dict[str, Any]:
-        """
-        Present bullish, bearish, and neutral cases based on all indicators.
-        
-        Returns:
-            Dict containing analysis of bearish, neutral, and bullish cases 
-            with supporting indicators and confidence levels
-        """
-        # First ensure we have run analysis
-        if self.data is None:
-            self.run_analysis()
-            
-        logger = logging.getLogger(__name__)
-        
-        # Get indicator data including interpretations
-        indicators = self._summarize_indicators()
-        
-        # Group indicators by their signal
-        bullish_indicators = []
-        bearish_indicators = []
-        neutral_indicators = []
-        
-        # Process interpretations from the flat dictionary
-        for indicator, data in indicators.items():
-            if indicator == 'interpretations':
-                continue
-                
-            interpretation = None
-            # Handle both the new and legacy formats
-            if isinstance(data, dict) and 'interpretation' in data:
-                interpretation = data['interpretation']
-            elif indicator in indicators.get('interpretations', {}):
-                interpretation = indicators['interpretations'][indicator]
-                
-            if interpretation:
-                logger.debug(f"Processing indicator: {indicator} with interpretation: {interpretation}")
-                interp_lower = interpretation.lower()
-                
-                # Skip unavailable indicators
-                if interp_lower in ['unavailable', 'nan']:
-                    continue
-                
-                # Categorize by signal words in the interpretation
-                if any(term in interp_lower for term in ['bullish', 'oversold', 'uptrend', 'confirming uptrend', 'strong bullish']):
-                    bullish_indicators.append((indicator, interpretation))
-                elif any(term in interp_lower for term in ['bearish', 'overbought', 'downtrend', 'confirming downtrend', 'strong bearish']):
-                    bearish_indicators.append((indicator, interpretation))
-                elif 'neutral' in interp_lower:
-                    neutral_indicators.append((indicator, interpretation))
-                    
-        logger.debug(f"Bullish indicators: {bullish_indicators}")
-        logger.debug(f"Bearish indicators: {bearish_indicators}")
-        logger.debug(f"Neutral indicators: {neutral_indicators}")
-        
-        # Calculate confidence levels based on weighted indicators
-        # Some indicators are more reliable than others
-        indicator_weights = {
-            'macd': 1.5,
-            'rsi': 1.2,
-            'bollinger': 1.2,
-            'ichimoku': 1.5,
-            'adx': 1.0,
-            'stochastic': 1.0,
-            'cci': 0.8,
-            'obv': 1.0,
-            'sma': 1.0,
-            'atr': 0.5  # Not directly a direction indicator
-        }
-        
-        # Calculate weighted counts
-        bullish_weight = sum(indicator_weights.get(ind[0], 1.0) for ind in bullish_indicators)
-        bearish_weight = sum(indicator_weights.get(ind[0], 1.0) for ind in bearish_indicators)
-        neutral_weight = sum(indicator_weights.get(ind[0], 1.0) for ind in neutral_indicators)
-        
-        total_weight = bullish_weight + bearish_weight + neutral_weight
-        
-        # Handle the case when there are no valid indicators
-        if total_weight == 0:
-            logger.warning("No valid indicators found for case analysis")
-            overall_sentiment = "Neutral"
-            bullish_confidence = 0
-            bearish_confidence = 0
-            neutral_confidence = 1.0  # Default to neutral when no indicators are available
-            
-            bullish_confidence_pct = "0.0%"
-            bearish_confidence_pct = "0.0%"
-            neutral_confidence_pct = "100.0%"
+                        values["Signal"] = "Neutral"
+                        confluence_signals.append("neutral")
+            elif key == "bbands":
+                bbl_col = next(
+                    (c for c in self.data.columns if c.upper().startswith("BBL_")),
+                    "BBL_20_2.0",
+                )
+                bbm_col = next(
+                    (c for c in self.data.columns if c.upper().startswith("BBM_")),
+                    "BBM_20_2.0",
+                )
+                bbu_col = next(
+                    (c for c in self.data.columns if c.upper().startswith("BBU_")),
+                    "BBU_20_2.0",
+                )
+                if (
+                    bbl_col in self.data.columns
+                    and bbm_col in self.data.columns
+                    and bbu_col in self.data.columns
+                ):
+                    lower = self.data[bbl_col].iloc[-1]
+                    upper = self.data[bbu_col].iloc[-1]
+                    close = self.data["close"].iloc[-1]
+                    values["Lower Band"] = f"{lower:.2f}"
+                    values["Upper Band"] = f"{upper:.2f}"
+                    if close > upper:
+                        values["Signal"] = "Price above Upper Band"
+                        confluence_signals.append("bearish")
+                        explanation = "Price above the upper Bollinger Band can indicate overbought conditions."
+                    elif close < lower:
+                        values["Signal"] = "Price below Lower Band"
+                        confluence_signals.append("bullish")
+                        explanation = "Price below the lower Bollinger Band can indicate oversold conditions."
+                    else:
+                        values["Signal"] = "Within Bands"
+                        confluence_signals.append("neutral")
+            elif key == "atr":
+                atr_col = next(
+                    (
+                        c
+                        for c in self.data.columns
+                        if c.upper().startswith("ATRP_") or c.upper().startswith("ATR_")
+                    ),
+                    "ATRP_14",
+                )
+                if atr_col in self.data.columns:
+                    atr_val = self.data[atr_col].iloc[-1]
+                    unit = "%" if "P" in atr_col.upper() else ""
+                    values[f"ATR ({'percent' if unit else 'value'})"] = (
+                        f"{atr_val:.2f}{unit}"
+                    )
+                    explanation = "ATR measures average volatility. Higher ATR means more price movement."
+            elif key == "psar":
+                psar_col = next((c for c in self.data.columns if c.lower().startswith("psar")), None)
+                if psar_col and psar_col in self.data.columns:
+                    psar_val = self.data[psar_col].iloc[-1]
+                    price = self.data["close"].iloc[-1]
+                    values["PSAR"] = f"{psar_val:.2f}"
+                    if price > psar_val:
+                        values["Signal"] = "Bullish (price above PSAR)"
+                        confluence_signals.append("bullish")
+                        explanation = "Price above the Parabolic SAR suggests a bullish trend."
+                    else:
+                        values["Signal"] = "Bearish (price below PSAR)"
+                        confluence_signals.append("bearish")
+                        explanation = "Price below the Parabolic SAR suggests a bearish trend."
+            elif key == "willr":
+                col_name = "WILLR_14"
+                if col_name in self.data.columns:
+                    wr_val = self.data[col_name].iloc[-1]
+                    values["Williams %R (14)"] = f"{wr_val:.2f}"
+                    if wr_val > -20:
+                        values["Signal"] = "Overbought"
+                        confluence_signals.append("bearish")
+                        explanation = "Williams %R above -20 is considered overbought, which can signal a potential reversal or pullback."
+                    elif wr_val < -80:
+                        values["Signal"] = "Oversold"
+                        confluence_signals.append("bullish")
+                        explanation = "Williams %R below -80 is considered oversold, which can signal a potential upward reversal."
+                    else:
+                        values["Signal"] = "Neutral"
+                        confluence_signals.append("neutral")
+            elif key == "cmf":
+                col_name = next((c for c in self.data.columns if c.lower().startswith("cmf")), None)
+                if col_name and col_name in self.data.columns:
+                    cmf_val = self.data[col_name].iloc[-1]
+                    values["CMF (20)"] = f"{cmf_val:.3f}"
+                    if cmf_val > 0.1:
+                        values["Signal"] = "Bullish (strong buying pressure)"
+                        confluence_signals.append("bullish")
+                        explanation = "CMF above 0.1 indicates strong buying pressure and accumulation."
+                    elif cmf_val < -0.1:
+                        values["Signal"] = "Bearish (strong selling pressure)"
+                        confluence_signals.append("bearish")
+                        explanation = "CMF below -0.1 indicates strong selling pressure and distribution."
+                    else:
+                        values["Signal"] = "Neutral"
+                        confluence_signals.append("neutral")
+            elif key == "vwap":
+                vwap_col = next((c for c in self.data.columns if c.upper().startswith("VWAP")), None)
+                if vwap_col and vwap_col in self.data.columns:
+                    vwap_val = self.data[vwap_col].iloc[-1]
+                    price = self.data["close"].iloc[-1]
+                    values["VWAP"] = f"{vwap_val:.2f}"
+                    if price > vwap_val:
+                        values["Signal"] = "Bullish (price above VWAP)"
+                        confluence_signals.append("bullish")
+                        explanation = "Price above VWAP suggests bullish sentiment and institutional accumulation."
+                    elif price < vwap_val:
+                        values["Signal"] = "Bearish (price below VWAP)"
+                        confluence_signals.append("bearish")
+                        explanation = "Price below VWAP suggests bearish sentiment and potential distribution."
+                    else:
+                        values["Signal"] = "Neutral"
+                        confluence_signals.append("neutral")
+            elif key == "heikinashi":
+                ha_close_col = next((c for c in self.data.columns if c.lower().startswith("heikinashi_close")), None)
+                ha_open_col = next((c for c in self.data.columns if c.lower().startswith("heikinashi_open")), None)
+                if ha_close_col and ha_open_col and ha_close_col in self.data.columns and ha_open_col in self.data.columns:
+                    ha_close = self.data[ha_close_col].iloc[-1]
+                    ha_open = self.data[ha_open_col].iloc[-1]
+                    values["Heikin Ashi Close"] = f"{ha_close:.2f}"
+                    values["Heikin Ashi Open"] = f"{ha_open:.2f}"
+                    if ha_close > ha_open:
+                        values["Signal"] = "Bullish Heikin Ashi candle"
+                        confluence_signals.append("bullish")
+                        explanation = "Latest Heikin Ashi candle is bullish (close > open), suggesting upward momentum."
+                    elif ha_close < ha_open:
+                        values["Signal"] = "Bearish Heikin Ashi candle"
+                        confluence_signals.append("bearish")
+                        explanation = "Latest Heikin Ashi candle is bearish (close < open), suggesting downward momentum."
+                    else:
+                        values["Signal"] = "Neutral Heikin Ashi candle"
+                        confluence_signals.append("neutral")
+            elif key == "adx":
+                adx_col = "ADX_14"
+                plus_di_col = "DM+_14"
+                minus_di_col = "DM-_14"
+                if all(col in self.data.columns for col in [adx_col, plus_di_col, minus_di_col]):
+                    adx = self.data[adx_col].iloc[-1]
+                    plus_di = self.data[plus_di_col].iloc[-1]
+                    minus_di = self.data[minus_di_col].iloc[-1]
+                    values["ADX (14)"] = f"{adx:.2f}"
+                    values["+DI (14)"] = f"{plus_di:.2f}"
+                    values["-DI (14)"] = f"{minus_di:.2f}"
+                    if adx > 20:
+                        if plus_di > minus_di:
+                            values["Signal"] = "Bullish (trend: +DI > -DI, ADX > 20)"
+                            confluence_signals.append("bullish")
+                            explanation = "+DI above -DI and ADX above 20 suggests a bullish trend."
+                        elif minus_di > plus_di:
+                            values["Signal"] = "Bearish (trend: -DI > +DI, ADX > 20)"
+                            confluence_signals.append("bearish")
+                            explanation = "-DI above +DI and ADX above 20 suggests a bearish trend."
+                        else:
+                            values["Signal"] = "Neutral (DI lines equal, ADX > 20)"
+                            confluence_signals.append("neutral")
+                            explanation = "DI lines are equal and ADX above 20, trend is unclear."
+                    else:
+                        values["Signal"] = "Neutral (ADX <= 20)"
+                        confluence_signals.append("neutral")
+                        explanation = "ADX below or equal to 20, trend is weak or ranging."
+            elif key == "kc":
+                kcl_col = next((c for c in self.data.columns if c.lower().startswith("kcl_")), None)
+                kcm_col = next((c for c in self.data.columns if c.lower().startswith("kcm_")), None)
+                kcu_col = next((c for c in self.data.columns if c.lower().startswith("kcu_")), None)
+                if kcl_col and kcm_col and kcu_col:
+                    lower = self.data[kcl_col].iloc[-1]
+                    middle = self.data[kcm_col].iloc[-1]
+                    upper = self.data[kcu_col].iloc[-1]
+                    close = self.data["close"].iloc[-1]
+                    values["KC Lower"] = f"{lower:.2f}"
+                    values["KC Middle"] = f"{middle:.2f}"
+                    values["KC Upper"] = f"{upper:.2f}"
+                    if close > upper:
+                        values["Signal"] = "Price above Upper KC (bullish breakout)"
+                        confluence_signals.append("bullish")
+                        explanation = "Price above the upper Keltner Channel can indicate a bullish breakout."
+                    elif close < lower:
+                        values["Signal"] = "Price below Lower KC (bearish breakdown)"
+                        confluence_signals.append("bearish")
+                        explanation = "Price below the lower Keltner Channel can indicate a bearish breakdown."
+                    else:
+                        values["Signal"] = "Within Keltner Channels"
+                        confluence_signals.append("neutral")
+                        explanation = "Price within Keltner Channels suggests no strong directional signal."
+            elif key == "stoch":
+                k_col = next((c for c in self.data.columns if c.lower().startswith("stochk_")), None)
+                d_col = next((c for c in self.data.columns if c.lower().startswith("stochd_")), None)
+                if k_col and d_col and k_col in self.data.columns and d_col in self.data.columns:
+                    k_val = self.data[k_col].iloc[-1]
+                    d_val = self.data[d_col].iloc[-1]
+                    values["%K (14)"] = f"{k_val:.2f}"
+                    values["%D (3)"] = f"{d_val:.2f}"
+                    if k_val > 80:
+                        values["Signal"] = "Overbought"
+                        confluence_signals.append("bearish")
+                        explanation = "Stochastic %K above 80 is considered overbought, which can signal a potential reversal or pullback."
+                    elif k_val < 20:
+                        values["Signal"] = "Oversold"
+                        confluence_signals.append("bullish")
+                        explanation = "Stochastic %K below 20 is considered oversold, which can signal a potential upward reversal."
+                    else:
+                        values["Signal"] = "Neutral"
+                        confluence_signals.append("neutral")
+                        explanation = "Stochastic is in a neutral range."
+            elif key == "cci":
+                cci_col = next((c for c in self.data.columns if c.lower().startswith("cci_")), None)
+                if cci_col and cci_col in self.data.columns:
+                    cci_val = self.data[cci_col].iloc[-1]
+                    values["CCI (20)"] = f"{cci_val:.2f}"
+                    if cci_val > 100:
+                        values["Signal"] = "Overbought"
+                        confluence_signals.append("bearish")
+                        explanation = "CCI above +100 is considered overbought, which can signal a potential reversal or pullback."
+                    elif cci_val < -100:
+                        values["Signal"] = "Oversold"
+                        confluence_signals.append("bullish")
+                        explanation = "CCI below -100 is considered oversold, which can signal a potential upward reversal."
+                    else:
+                        values["Signal"] = "Neutral"
+                        confluence_signals.append("neutral")
+            if values:
+                indicator_data["values"] = values
+                indicator_data["explanation"] = explanation
+                # Always include the correct explanation_key for CLI/HTML output
+                if "explanation_key" in config:
+                    indicator_data["explanation_key"] = config["explanation_key"]
+                if "explanation_key" in config:
+                    try:
+                        from src.cli.commands.analyzer_modules.education import get_indicator_explanation
+                        indicator_data["education"] = get_indicator_explanation(
+                            config["explanation_key"]
+                        )
+                    except ImportError:
+                        indicator_data["education"] = "Explanation unavailable."
+                indicators_summary[key] = indicator_data
+        # Confluence summary
+        bullish = confluence_signals.count("bullish")
+        bearish = confluence_signals.count("bearish")
+        neutral = confluence_signals.count("neutral")
+        if bullish > bearish and bullish > 1:
+            confluence_note = "Multiple indicators align bullishly (confluence)."
+        elif bearish > bullish and bearish > 1:
+            confluence_note = "Multiple indicators align bearishly (confluence)."
         else:
-            # Calculate confidence percentages
-            bullish_confidence = bullish_weight / total_weight
-            bearish_confidence = bearish_weight / total_weight
-            neutral_confidence = neutral_weight / total_weight
-            
-            # Format as percentages
-            bullish_confidence_pct = f"{bullish_confidence * 100:.1f}%"
-            bearish_confidence_pct = f"{bearish_confidence * 100:.1f}%"
-            neutral_confidence_pct = f"{neutral_confidence * 100:.1f}%"
-            
-            # Determine overall sentiment
-            overall_sentiment = "Neutral"
-            if bullish_confidence > max(bearish_confidence, neutral_confidence):
-                overall_sentiment = "Bullish"
-            elif bearish_confidence > max(bullish_confidence, neutral_confidence):
-                overall_sentiment = "Bearish"
-        
-        # Build the result with supporting evidence
-        result = {
-            'overall_sentiment': overall_sentiment,
-            'cases': {
-                'bullish': {
-                    'confidence': bullish_confidence_pct,
-                    'confidence_raw': bullish_confidence,
-                    'supporting_indicators': bullish_indicators
-                },
-                'bearish': {
-                    'confidence': bearish_confidence_pct,
-                    'confidence_raw': bearish_confidence,
-                    'supporting_indicators': bearish_indicators
-                },
-                'neutral': {
-                    'confidence': neutral_confidence_pct,
-                    'confidence_raw': neutral_confidence,
-                    'supporting_indicators': neutral_indicators
-                }
-            }
+            confluence_note = "No strong confluence among indicators."
+        indicators_summary["overall_indicator_confluence"] = {
+            "bullish": bullish,
+            "bearish": bearish,
+            "neutral": neutral,
+            "note": confluence_note
         }
-        
-        # Add overall explanation
-        supporting_case = overall_sentiment.lower()
-        num_supporters = len(result['cases'][supporting_case]['supporting_indicators'])
-        
-        if total_weight == 0:
-            result['explanation'] = "No valid indicators available for analysis. Defaulting to Neutral."
-        else:
-            result['explanation'] = (
-                f"The {supporting_case} case has the highest confidence at {result['cases'][supporting_case]['confidence']} "
-                f"with {num_supporters} supporting indicators."
-            )
-        
-        return result
+        self.analysis_results["indicators_summary"] = indicators_summary
+        return indicators_summary
 
-    def get_advanced_analytics(self) -> Dict[str, Any]:
+    def _get_default_indicators(self) -> Dict[str, Any]:
         """
-        Compute advanced analytics: volatility forecast, regime detection, strategy suggestion, and open interest analysis.
-        Returns:
-            Dict with keys:
-                - 'volatility_forecast': dict of forecasts for 24h, 4h, 1h
-                - 'regime': output of detect_regime
-                - 'strategy_suggestion': output of suggest_strategy_for_regime
-                - 'watch_for_signals': list of 'what to watch for' signals (optional)
-                - 'open_interest_analysis': dict with OI regime and summary (educational, actionable)
-                - 'breakout_strategy': output of analyze_breakout_strategy with support/resistance and entry/exit points
+        Returns a default configuration for indicators.
+        This helps in summarizing and explaining them later.
         """
-        from src.services.indicators import forecast_volatility
-        from src.services.trading_strategies import detect_regime, suggest_strategy_for_regime, generate_watch_for_signals
-        from src.services.open_interest import fetch_open_interest
-        from src.services.breakout_strategy import analyze_breakout_strategy
-
-        if self.data is None or self.data.empty:
-            return {
-                'volatility_forecast': {},
-                'regime': {'trend_regime': 'ambiguous', 'volatility_regime': 'ambiguous', 'confidence': 'low', 'metrics': {}},
-                'strategy_suggestion': {'strategy': 'insufficient_data', 'educational_rationale': 'Not enough data to determine a safe or effective strategy.', 'actionable_advice': 'Do not open new positions.'},
-                'watch_for_signals': ["Watch for more price action and indicator signals to develop before trading."],
-                'open_interest_analysis': {'regime': 'insufficient_data', 'confidence': 'low', 'summary': 'No open interest data available.'},
-                'breakout_strategy': {'status': 'error', 'message': 'Insufficient data for breakout analysis', 'long_breakout': None, 'short_breakout': None}
-            }
-        # Volatility forecasts
-        volatility_forecast = {
-            horizon: forecast_volatility(self.data, horizon=horizon)
-            for horizon in ["24h", "4h", "1h"]
-        }
-        # Regime detection
-        regime = detect_regime(self.data)
-        # Strategy suggestion
-        strategy_suggestion = suggest_strategy_for_regime(regime)
-        # Watch for signals (only if strategy is 'insufficient_data' or 'reduce_exposure')
-        watch_for_signals = []
-        if strategy_suggestion.get('strategy') in ['insufficient_data', 'reduce_exposure']:
-            watch_for_signals = generate_watch_for_signals(regime, regime.get('metrics', {}))
-        
-        # Open Interest Analytics
-        try:
-            # Fetch open interest data that already includes enhanced analysis
-            oi_data = fetch_open_interest(self.symbol)
-            
-            # Get the latest price from our data
-            latest_price = float(self.data['close'].iloc[-1]) if not self.data.empty else 0
-            
-            # Add debug logging to see the structure of the data
-            logging.info(f"Open interest data keys: {oi_data.keys()}")
-            
-            # Don't try to enhance the data - our mock data generator already provides all needed fields
-            # Just use the data as is
-            oi_analysis = oi_data
-            
-        except Exception as e:
-            logging.error(f"Error fetching open interest data: {e}")
-            oi_analysis = {
-                'regime': 'error', 
-                'confidence': 'low',
-                'summary': f'Error fetching or analyzing open interest: {e}',
-                'value': 0,
-                'change_24h': 0,
-                'trading_signals': {'signal': 'neutral', 'action': 'wait', 'entry': None, 'stop_loss': None, 'take_profit': None},
-                'metrics': {},
-                'divergence': {'detected': False, 'type': None, 'strength': 0}
-            }
-        
-        # Breakout Strategy Analysis
-        try:
-            # Use analyze_breakout_strategy to get breakout recommendations
-            breakout_analysis = analyze_breakout_strategy(self.data)
-        except Exception as e:
-            logging.error(f"Error analyzing breakout strategy: {e}")
-            breakout_analysis = {
-                'status': 'error',
-                'message': f'Error analyzing breakout strategy: {e}',
-                'long_breakout': None,
-                'short_breakout': None
-            }
-        
+        # This should align with indicators added in market_data.add_technical_indicators
         return {
-            'volatility_forecast': volatility_forecast,
-            'regime': regime,
-            'strategy_suggestion': strategy_suggestion,
-            'watch_for_signals': watch_for_signals,
-            'open_interest_analysis': oi_analysis,
-            'breakout_strategy': breakout_analysis
-        } 
+            "sma": {
+                "display_name": "Simple Moving Averages",
+                "params": {"lengths": [20, 50, 100]},
+                "explanation_key": "sma",
+            },
+            "ema": {
+                "display_name": "Exponential Moving Averages",
+                "params": {"lengths": [12, 26]},
+                "explanation_key": "ema",
+            },
+            "rsi": {
+                "display_name": "Relative Strength Index",
+                "params": {"length": 14},
+                "explanation_key": "rsi",
+            },
+            "macd": {
+                "display_name": "Moving Average Convergence Divergence",
+                "params": {"fast": 12, "slow": 26, "signal": 9},
+                "explanation_key": "macd",
+            },
+            "bbands": {
+                "display_name": "Bollinger Bands",
+                "params": {"length": 20, "std": 2},
+                "explanation_key": "bollinger_bands",
+            },
+            "atr": {
+                "display_name": "Average True Range",
+                "params": {"length": 14},
+                "explanation_key": "atr",
+            },  # Assumes pandas-ta adds ATRP_14 or ATR_14
+            # Add other common indicators like OBV, VWAP if they are standardly added and have explanations
+            "obv": {
+                "display_name": "On-Balance Volume",
+                "params": {},
+                "explanation_key": "obv",
+            },
+            "vwap": {
+                "display_name": "Volume Weighted Average Price",
+                "params": {},
+                "explanation_key": "vwap",
+            },
+            "ichimoku": {
+                "display_name": "Ichimoku Cloud",
+                "params": {"tenkan": 9, "kijun": 26, "senkou": 52},
+                "explanation_key": "ichimoku_cloud",
+            },
+            "psar": {
+                "display_name": "Parabolic SAR",
+                "params": {},
+                "explanation_key": "psar",
+            },
+            "willr": {
+                "display_name": "Williams %R",
+                "params": {"length": 14},
+                "explanation_key": "williamsr",
+            },
+            "cmf": {
+                "display_name": "Chaikin Money Flow",
+                "params": {"length": 20},
+                "explanation_key": "cmf",
+            },
+            "heikinashi": {
+                "display_name": "Heikin Ashi",
+                "params": {},
+                "explanation_key": "heikinashi",
+            },
+            "adx": {
+                "display_name": "Directional Movement Index (DMI)",
+                "params": {"length": 14},
+                "explanation_key": "adx",
+            },
+            "kc": {
+                "display_name": "Keltner Channels",
+                "params": {"length": 20, "scalar": 2, "mamode": "ema"},
+                "explanation_key": "kc",
+            },
+            "stoch": {
+                "display_name": "Stochastic Oscillator",
+                "params": {"k": 14, "d": 3},
+                "explanation_key": "stoch",
+            },
+            "cci": {
+                "display_name": "Commodity Channel Index",
+                "params": {"length": 20},
+                "explanation_key": "cci",
+            },
+        }
+
+    def present_cases(self, num_cases: int = 3) -> Dict[str, Any]:
+        """
+        Presents a few potential market scenarios or cases based on the analysis, now including RSI and educational notes.
+        """
+        if self.analysis_results.get("error") or self.data is None or self.data.empty:
+            return {
+                "error": "Cannot generate market cases due to missing data or prior analysis error."
+            }
+        trend_summary = self.analysis_results.get(
+            "trend_analysis", self._get_trend_summary()
+        )
+        overall_trend = trend_summary.get("overall_trend", "neutral").lower()
+        sr_summary = self.analysis_results.get(
+            "support_resistance", self._get_support_resistance_summary()
+        )
+        support = sr_summary.get("support", [])
+        resistance = sr_summary.get("resistance", [])
+        current_price_str = self.analysis_results.get("price_snapshot", {}).get(
+            "current_price", "N/A"
+        )
+        indicators_summary = self.analysis_results.get("indicators_summary", self._summarize_indicators())
+        rsi_signal = indicators_summary.get("rsi", {}).get("values", {}).get("Signal", "Neutral")
+        rsi_explanation = indicators_summary.get("rsi", {}).get("explanation", "")
+        cases = {}
+        if "bullish" in overall_trend:
+            cases["bullish_continuation"] = {
+                "scenario": "Bullish Trend Continuation",
+                "description": (
+                    f"The current {overall_trend} trend may continue. "
+                    f"RSI status: {rsi_signal}. {rsi_explanation} "
+                    "Look for buying opportunities on dips or breakouts above "
+                    "near-term resistance."
+                ),
+                "confidence": trend_summary.get("confidence", "medium"),
+                "key_levels": {
+                    "resistance_targets": resistance,
+                    "support_stops": support,
+                },
+                "potential_triggers": [
+                    "Break above nearest resistance",
+                    "Positive volume confirmation",
+                ],
+                "educational_note": "A bullish trend with RSI not overbought suggests more room for upside. If RSI is overbought, caution is warranted as a pullback may occur."
+            }
+        elif "bearish" in overall_trend:
+            cases["bearish_continuation"] = {
+                "scenario": "Bearish Trend Continuation",
+                "description": (
+                    f"The current {overall_trend} trend may persist. "
+                    f"RSI status: {rsi_signal}. {rsi_explanation} "
+                    "Consider shorting opportunities on rallies or breakdowns "
+                    "below near-term support."
+                ),
+                "confidence": trend_summary.get("confidence", "medium"),
+                "key_levels": {
+                    "support_targets": support,
+                    "resistance_stops": resistance,
+                },
+                "potential_triggers": [
+                    "Break below nearest support",
+                    "Negative volume confirmation",
+                ],
+                "educational_note": "A bearish trend with RSI not oversold suggests further downside is possible. If RSI is oversold, a bounce or reversal may be near."
+            }
+        else:
+            cases["ranging_market"] = {
+                "scenario": "Ranging or Indecisive Market",
+                "description": (
+                    "The market appears to be in a consolidation or neutral "
+                    f"phase. RSI status: {rsi_signal}. {rsi_explanation} "
+                    "Trade ranges if clearly defined, or wait for a "
+                    "clear breakout. Support and resistance levels are key "
+                    "to watch."
+                ),
+                "confidence": trend_summary.get("confidence", "low"),
+                "key_levels": {"support": support, "resistance": resistance},
+                "potential_triggers": [
+                    "Breakout from range",
+                    "Strong volume spike indicating new interest",
+                ],
+                "educational_note": "A neutral RSI in a ranging market suggests indecision. Watch for RSI to move out of neutral to signal a new trend."
+            }
+        if (
+            trend_summary.get("confidence", "high") != "high"
+            and overall_trend != "neutral"
+        ):
+            if "bullish" in overall_trend:
+                cases["bearish_reversal"] = {
+                    "scenario": "Potential Bearish Reversal",
+                    "description": (
+                        "If the current bullish momentum fades, a bearish "
+                        "reversal could occur, especially if price fails at "
+                        "key resistance or breaks below support. "
+                        f"RSI status: {rsi_signal}. {rsi_explanation} "
+                    ),
+                    "confidence": "low",
+                    "key_levels": {
+                        "resistance_to_watch": resistance,
+                        "support_breakdown": support,
+                    },
+                    "potential_triggers": [
+                        "Failure at resistance",
+                        "Breakdown of key support with volume",
+                    ],
+                    "educational_note": "If RSI is overbought during a bullish trend, the risk of reversal increases."
+                }
+            elif "bearish" in overall_trend:
+                cases["bullish_reversal"] = {
+                    "scenario": "Potential Bullish Reversal",
+                    "description": (
+                        "If the current bearish pressure eases, a bullish "
+                        "reversal might be possible, particularly if price "
+                        "reclaims key support or breaks resistance. "
+                        f"RSI status: {rsi_signal}. {rsi_explanation} "
+                    ),
+                    "confidence": "low",
+                    "key_levels": {
+                        "support_to_hold": support,
+                        "resistance_breakout": resistance,
+                    },
+                    "potential_triggers": [
+                        "Strong bounce from support",
+                        "Breakout above key resistance with volume",
+                    ],
+                    "educational_note": "If RSI is oversold during a bearish trend, the risk of reversal increases."
+                }
+        final_cases_list = list(cases.values())[:num_cases]
+        # PATCH: Ensure every scenario has a non-empty supporting_factors list
+        known_indicators = {
+            'RSI', 'MACD', 'SMA', 'EMA', 'BBANDS', 'ATR', 'OBV', 'VWAP', 'ICHIMOKU',
+            'PSAR', 'WILLR', 'CMF', 'STOCH', 'KC', 'CCI', 'ADX'
+        }
+        for case in final_cases_list:
+            # Determine scenario direction
+            scenario_name = case.get('scenario', '').lower()
+            if 'bullish' in scenario_name:
+                direction = 'bullish'
+            elif 'bearish' in scenario_name:
+                direction = 'bearish'
+            elif 'neutral' in scenario_name or 'ranging' in scenario_name or 'sideways' in scenario_name:
+                direction = 'neutral'
+            else:
+                direction = None
+
+            # Build supporting_factors from indicator summary
+            supporting_factors = []
+            for ind_key, ind_data in indicators_summary.items():
+                if not isinstance(ind_data, dict):
+                    continue
+                # Try to find the signal for this indicator
+                values = ind_data.get('values', {})
+                # Heuristic: look for a 'Signal' or 'Signal ...' key
+                signal = None
+                for k, v in values.items():
+                    if k.lower().startswith('signal'):
+                        signal = v.lower()
+                        break
+                if not signal:
+                    continue
+                # Match signal to scenario direction
+                if direction == 'bullish' and 'bullish' in signal:
+                    rationale = ind_data.get('explanation', 'Bullish signal from indicator.')
+                    supporting_factors.append(f"{ind_key.upper()} rationale: {rationale}")
+                elif direction == 'bearish' and 'bearish' in signal:
+                    rationale = ind_data.get('explanation', 'Bearish signal from indicator.')
+                    supporting_factors.append(f"{ind_key.upper()} rationale: {rationale}")
+                elif direction == 'neutral' and ('neutral' in signal or 'mixed' in signal):
+                    rationale = ind_data.get('explanation', 'Neutral/mixed signal from indicator.')
+                    supporting_factors.append(f"{ind_key.upper()} rationale: {rationale}")
+            # If none found, fall back to previous logic
+            if not supporting_factors:
+                rationale = case.get('educational_note') or case.get('description') or 'Scenario rationale not specified.'
+                import re
+                indicators_found = set()
+                for indicator in known_indicators:
+                    for text in [case.get('educational_note', ''), case.get('description', '')]:
+                        if re.search(rf'\b{indicator}\b', text, re.IGNORECASE):
+                            indicators_found.add(indicator)
+                if indicators_found:
+                    supporting_factors = [f"{ind} rationale: {rationale}" for ind in sorted(indicators_found)]
+                else:
+                    if 'rsi' in rationale.lower():
+                        supporting_factors = [f"RSI rationale: {rationale}"]
+                    else:
+                        supporting_factors = [rationale]
+            case['supporting_factors'] = supporting_factors
+        self.analysis_results["market_cases"] = final_cases_list
+        return {"cases": final_cases_list}
+
+    def analyze(self, include_advanced: bool = False) -> Dict[str, Any]:
+        """
+        Run the full analysis pipeline and return a consolidated results dictionary.
+        """
+        logger.info(
+            f"Starting full analysis pipeline for {self.symbol} (Advanced: "
+            f"{include_advanced})..."
+        )
+        self.run_analysis()
+        if self.analysis_results.get("error"):
+            logger.error(
+                f"Exiting full analysis early for {self.symbol} due to error: "
+                f"{self.analysis_results['error']}"
+            )
+            return {"error": self.analysis_results["error"]}
+        self.get_summary()
+        self.present_cases()
+        self.generate_visualizations()
+        advanced_analytics_results = {}
+        if include_advanced:
+            if AdvancedMarketAnalyzer is not None and self.data is not None and not self.data.empty:
+                try:
+                    adv_analyzer = AdvancedMarketAnalyzer(
+                        self.data, self.symbol, self.timeframe
+                    )
+                    advanced_analytics_results = (
+                        adv_analyzer.run_all_advanced_analytics()
+                    )
+                    self.analysis_results["advanced_analytics"] = (
+                        advanced_analytics_results
+                    )
+                except Exception as e:
+                    logger.error(
+                        f"Error running advanced analytics for {self.symbol}: {e}",
+                        exc_info=True,
+                    )
+                    self.analysis_results["advanced_analytics"] = {"error": str(e)}
+            elif AdvancedMarketAnalyzer is None:
+                self.analysis_results["advanced_analytics"] = {
+                    "status": "Advanced analyzer not available (import failed)."
+                }
+            else:
+                self.analysis_results["advanced_analytics"] = {
+                    "status": "Data not available for advanced analytics."
+                }
+        final_display_results = {
+            "symbol": self.symbol,
+            "timeframe": self.timeframe,
+            "generated_at": datetime.now().isoformat(),
+            # Ensure 'summary' is a dict with 'general_overview' key for CLI output compatibility
+            "summary": {"general_overview": self.analysis_results.get("general_overview", "Summary not generated.")},
+            "price_snapshot": self.analysis_results.get("price_snapshot", {}),
+            "trend_analysis": self.analysis_results.get("trend_analysis", {}),
+            "volatility_analysis": self.analysis_results.get("volatility_analysis", {}),
+            "support_resistance": self.analysis_results.get("support_resistance", {}),
+            "volume_analysis": self.analysis_results.get("volume_analysis", {}),
+            "key_indicators": self.analysis_results.get("key_indicators", {}),
+            "market_cases": self.analysis_results.get("market_cases", []),
+            "advanced_analytics": self.analysis_results.get("advanced_analytics", {}),
+            "visualizations": self.visualizations,
+        }
+        logger.info(f"Full analysis pipeline completed for {self.symbol}.")
+        return final_display_results
+
+    def _detect_candlestick_patterns(self) -> list:
+        """
+        Detect common candlestick patterns using TA-Lib and return a list of detected patterns.
+        Each pattern is a dict with 'name', 'date', and 'signal' (bullish/bearish/neutral).
+        """
+        if self.data is None or self.data.empty:
+            return []
+        patterns = {
+            'Doji': talib.CDLDOJI,
+            'Engulfing': talib.CDLENGULFING,
+            'Hammer': talib.CDLHAMMER,
+            'Harami': talib.CDLHARAMI,
+            'Morning Star': lambda o, h, l, c: talib.CDLMORNINGSTAR(o, h, l, c, penetration=0.3),
+            'Shooting Star': talib.CDLSHOOTINGSTAR,
+            'Hanging Man': talib.CDLHANGINGMAN,
+            'Three White Soldiers': talib.CDL3WHITESOLDIERS,
+            'Three Black Crows': talib.CDL3BLACKCROWS,
+            'Dark Cloud Cover': talib.CDLDARKCLOUDCOVER,
+            'Piercing Line': talib.CDLPIERCING,
+            'Evening Star': lambda o, h, l, c: talib.CDLEVENINGSTAR(o, h, l, c, penetration=0.3),
+            'Spinning Top': talib.CDLSPINNINGTOP,
+            'Marubozu': talib.CDLMARUBOZU,
+        }
+        detected = []
+        o = self.data['open'].astype(float).values
+        h = self.data['high'].astype(float).values
+        l = self.data['low'].astype(float).values
+        c = self.data['close'].astype(float).values
+        idx = self.data.index
+        for name, func in patterns.items():
+            try:
+                result = func(o, h, l, c)
+                for i, val in enumerate(result):
+                    if val != 0:
+                        signal = 'bullish' if val > 0 else 'bearish' if val < 0 else 'neutral'
+                        detected.append({
+                            'name': name,
+                            'date': str(idx[i]),
+                            'signal': signal
+                        })
+            except Exception as e:
+                continue
+        return detected
+
+if __name__ == '__main__':
+    from src.config.logging_config import setup_logging, set_log_level
+    setup_logging()
+    set_log_level("INFO")
+    logger.info("Starting MarketAnalyzer example usage...")

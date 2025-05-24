@@ -9,7 +9,6 @@ Handles command-line parsing and delegates to appropriate modules.
 import os
 import sys
 import typer
-from typing import Optional
 
 # Add the src directory to the Python path if running from the project root
 src_dir = os.path.dirname(os.path.abspath(__file__))
@@ -19,13 +18,12 @@ if project_root not in sys.path:
 
 # Import command groups
 from src.cli.commands import (
+    analyzer_app,
+    clean_app,
+    config_app,
     indicator_app,
     price_app,
-    analysis_app,
-    status_app,
-    clean_app,
-    analyzer_app,
-    config_app
+    status_app
 )
 
 # Create the main app instance
@@ -34,7 +32,6 @@ app = typer.Typer(help="BTC-USDT Market Analysis CLI")
 # Register command groups
 app.add_typer(indicator_app, name="indicator")
 app.add_typer(price_app, name="price")
-app.add_typer(analysis_app, name="analysis")
 app.add_typer(status_app, name="status")
 app.add_typer(clean_app, name="clean")
 app.add_typer(analyzer_app, name="analyzer")

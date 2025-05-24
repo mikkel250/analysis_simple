@@ -1,20 +1,18 @@
 """
 Data Fetcher Module
 
-This module handles fetching cryptocurrency market data from CoinGecko API
+This module handles fetching cryptocurrency market data using CCXT for the OKX exchange
 and converting it to pandas DataFrame format suitable for technical analysis.
 """
 
 import time
-import json
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple, Union, Any
-
+import ccxt
 import pandas as pd
-from pycoingecko import CoinGeckoAPI
+from datetime import datetime, timezone
+from typing import Dict, Optional, Union, Any, List
 
 # Import config loader
-from src.config.api_config import get_api_credentials
+from src.config.api_config import get_api_credentials, mask_credentials
 
 # Import cache_service for caching price data
 from .cache_service import (
@@ -22,628 +20,377 @@ from .cache_service import (
     get_cached_dataframe,
     store_json_data,
     get_cached_json_data,
-    invalidate_cache,
-    DEFAULT_TTL
 )
 
-# Need to add logger to data_fetcher.py if not already present for the log messages above
-# (Assuming logger is already configured or will be added if missing)
 import logging
 logger = logging.getLogger(__name__)
 
+# CCXT Timeframe mapping
+CCXT_TIMEFRAMES = {
+    '1m': '1m', '3m': '3m', '5m': '5m', '15m': '15m', '30m': '30m',
+    '1h': '1h', '2h': '2h', '4h': '4h', '6h': '6h', '12h': '12h',
+    '1d': '1d', '1w': '1w'
+    # OKX also supports '1M', '3M', '6M', '1Y' - can be added if needed
+}
+
 class DataFetcher:
     """
-    A class to fetch cryptocurrency data from CoinGecko API.
+    A class to fetch cryptocurrency data from OKX API via CCXT.
     """
-    
-    def __init__(self):
-        """Initialize the DataFetcher with CoinGecko API client."""
-        cg_credentials = get_api_credentials("coingecko")
-        cg_api_key = cg_credentials.get("api_key") if cg_credentials else None
+
+    def __init__(self, exchange_name: str = "okx"):
+        """Initialize the DataFetcher with CCXT targeting OKX."""
+        logger.debug(f"Initializing DataFetcher for {exchange_name}...")
+        self.exchange_name = exchange_name.lower()
         
-        if cg_api_key:
-            self.cg = CoinGeckoAPI(api_key=cg_api_key)
-            logger.info("CoinGeckoAPI initialized with API key.")
+        credentials = get_api_credentials(self.exchange_name)
+        
+        if not credentials.get('apiKey') or not credentials.get('secret'):
+            logger.warning(
+                f"API key or secret not found for {self.exchange_name}. "
+                "Proceeding with unauthenticated access (rate limits will be stricter)."
+            )
+            # Initialize without authentication
+            self.exchange = getattr(ccxt, self.exchange_name)()
         else:
-            self.cg = CoinGeckoAPI()
-            logger.info("CoinGeckoAPI initialized without API key (public access).")
-        
-        # Set rate limit sleep time (in seconds) to avoid hitting API limits
-        self.rate_limit_sleep = 1.5
-        
-    def _handle_api_call(self, api_call_func, *args, **kwargs) -> Dict:
-        """
-        Helper method to handle API calls with rate limiting and error handling.
-        
-        Args:
-            api_call_func: Function to call the CoinGecko API
-            *args: Arguments to pass to the API call function
-            **kwargs: Keyword arguments to pass to the API call function
-            
-        Returns:
-            Dict: API response data
-            
-        Raises:
-            Exception: If API call fails after retries
-        """
-        max_retries = 3
-        retry_count = 0
-        
-        while retry_count < max_retries:
-            try:
-                result = api_call_func(*args, **kwargs)
-                # Sleep to respect rate limits
-                time.sleep(self.rate_limit_sleep)
-                return result
-            except Exception as e:
-                retry_count += 1
-                if retry_count >= max_retries:
-                    raise Exception(f"Failed to fetch data from CoinGecko API after {max_retries} retries: {str(e)}")
-                # Exponential backoff
-                time.sleep(self.rate_limit_sleep * (2 ** retry_count))
-        
-        # This should never be reached due to the exception above
-        raise Exception("Unexpected error in API call")
-    
-    def fetch_historical_ohlc(
-        self, 
-        coin_id: str = 'bitcoin', 
-        vs_currency: str = 'usd',
-        days: Union[int, str] = 30,
-        interval: str = 'daily',
+            logger.info(f"Initializing {self.exchange_name} with API credentials.")
+            logger.debug(f"Credentials for {self.exchange_name}: {mask_credentials(credentials)}")
+            self.exchange = getattr(ccxt, self.exchange_name)(credentials)
+
+        self.exchange.enableRateLimit = True  # CCXT handles rate limiting
+        # OKX default rate limit: 20 requests/2 seconds for public, 60/2s for private V5 endpoints
+        # fetchOHLCV and fetchTicker are typically public but ccxt might use private if authenticated
+        logger.debug(
+            f"CCXT rate limiting enabled for {self.exchange_name}. "
+            f"Default sleep: {self.exchange.rateLimit / 1000}s (may vary by endpoint)"
+        )
+
+    def _normalize_symbol_for_ccxt(self, symbol: str) -> str:
+        """Converts common symbol formats (e.g., BTC-USDT, btcusdt) to CCXT format (BTC/USDT)."""
+        s = symbol.upper().replace('-', '/')
+        if '/' not in s and len(s) > 3: # Attempt to split if no separator, e.g., BTCUSDT -> BTC/USDT
+            common_bases = ['BTC', 'ETH', 'SOL', 'XRP'] # Add more if needed
+            for base in common_bases:
+                if s.startswith(base):
+                    s = base + '/' + s[len(base):]
+                    break
+        logger.debug(f"Normalized symbol {symbol} to {s} for CCXT.")
+        return s
+
+    def _validate_timeframe(self, timeframe: str) -> str:
+        """Validates and returns a CCXT-compatible timeframe string."""
+        if timeframe in CCXT_TIMEFRAMES:
+            return CCXT_TIMEFRAMES[timeframe]
+        logger.warning(f"Invalid timeframe '{timeframe}'. Supported: {list(CCXT_TIMEFRAMES.keys())}. Defaulting to '1d'.")
+        return '1d'
+
+    def fetch_historical_ohlcv(
+        self,
+        symbol: str,
+        timeframe: str,
+        limit: int = 100,
+        since: Optional[int] = None, # timestamp in milliseconds
         use_cache: bool = True
     ) -> pd.DataFrame:
         """
-        Fetch historical OHLC data for a specified coin.
-        
+        Fetch historical OHLCV data for a specified symbol and timeframe from OKX.
+
         Args:
-            coin_id: CoinGecko coin ID (default: 'bitcoin')
-            vs_currency: Quote currency (default: 'usd')
-            days: Number of days to look back (default: 30)
-            interval: Data interval - 'daily' or 'hourly' (default: 'daily')
-            use_cache: Whether to use cached data if available (default: True)
-            
+            symbol: Trading pair symbol (e.g., 'BTC/USDT', 'BTC-USDT').
+            timeframe: Timeframe string (e.g., '1d', '1h', '5m').
+            limit: Number of candles to fetch (default: 100, OKX max varies, often 100-300 per call).
+            since: Start time in milliseconds (optional).
+            use_cache: Whether to use cached data if available (default: True).
+
         Returns:
-            pandas.DataFrame: OHLC data with columns [timestamp, open, high, low, close, volume]
+            Pandas DataFrame with [timestamp, open, high, low, close, volume] and timestamp as index.
+            Returns empty DataFrame on error or if no data.
         """
-        valid_intervals = ['daily', 'hourly']
-        if interval not in valid_intervals:
-            raise ValueError(f"Interval must be one of {valid_intervals}")
+        normalized_symbol = self._normalize_symbol_for_ccxt(symbol)
+        ccxt_timeframe = self._validate_timeframe(timeframe)
         
-        # Generate cache key
-        timeframe = '1d' if interval == 'daily' else '1h'
-        cache_key = f"ohlc_{coin_id}_{vs_currency}_{timeframe}_{days}"
+        # Adjust cache key to be more specific
+        cache_key_parts = [
+            "ohlcv", self.exchange_name, normalized_symbol.replace('/', '_'), 
+            ccxt_timeframe, str(limit)
+        ]
+        if since:
+            cache_key_parts.append(str(since))
+        cache_key = "_".join(cache_key_parts)
         
-        # Try to get from cache first if use_cache is True
+        logger.info(
+            f"Fetching historical OHLCV for {normalized_symbol}, timeframe: {ccxt_timeframe}, "
+            f"limit: {limit}, since: {since}, use_cache: {use_cache}"
+        )
+        logger.debug(f"Cache key: {cache_key}")
+
         if use_cache:
             cached_df = get_cached_dataframe(cache_key)
             if cached_df is not None:
+                logger.info(f"Cache hit for {cache_key}. Returning cached data.")
                 return cached_df
-        
-        # Get market chart data
+            logger.debug(f"Cache miss for {cache_key}.")
+
         try:
-            market_data = self._handle_api_call(
-                self.cg.get_coin_ohlc_by_id,
-                id=coin_id,
-                vs_currency=vs_currency,
-                days=days
+            if not self.exchange.has['fetchOHLCV']:
+                logger.error(f"{self.exchange_name} does not support fetchOHLCV via CCXT.")
+                return pd.DataFrame()
+
+            logger.debug(
+                f"Calling CCXT: fetch_ohlcv for {normalized_symbol}, {ccxt_timeframe}, since={since}, limit={limit}"
             )
             
-            # If no data is returned
-            if not market_data or len(market_data) == 0:
-                raise Exception(f"No data returned for {coin_id} in {vs_currency}")
-                
-            # Convert to DataFrame
-            df = pd.DataFrame(
-                market_data, 
-                columns=['timestamp', 'open', 'high', 'low', 'close']
+            params = {} # Placeholder for any exchange-specific params if needed in future
+            ohlcv_data = self.exchange.fetch_ohlcv(
+                normalized_symbol,
+                timeframe=ccxt_timeframe,
+                since=since,
+                limit=limit,
+                params=params
             )
-            
-            # Convert timestamp from milliseconds to datetime
-            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms')
-            
-            # Set timestamp as index
+
+            if not ohlcv_data:
+                logger.warning(f"No OHLCV data returned from {self.exchange_name} for {normalized_symbol}, {ccxt_timeframe}.")
+                return pd.DataFrame()
+
+            df = pd.DataFrame(ohlcv_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+            df['timestamp'] = pd.to_datetime(df['timestamp'], unit='ms', utc=True)
             df.set_index('timestamp', inplace=True)
+            # Ensure numeric types
+            for col in ['open', 'high', 'low', 'close', 'volume']:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
             
-            # Add empty volume column (CoinGecko OHLC endpoint doesn't provide volume)
-            df['volume'] = 0
-            
-            # Store in cache if not empty
+            df.dropna(inplace=True) # Drop rows where conversion failed
+
+            logger.debug(f"Processed DataFrame head for {normalized_symbol}:\n{df.head()}")
+
             if not df.empty and use_cache:
                 metadata = {
-                    'coin_id': coin_id,
-                    'vs_currency': vs_currency,
-                    'days': days,
-                    'interval': interval,
-                    'source': 'coingecko',
-                    'endpoint': 'ohlc'
+                    'symbol': normalized_symbol,
+                    'timeframe': ccxt_timeframe,
+                    'limit': limit,
+                    'since': since,
+                    'source': self.exchange_name,
+                    'endpoint': 'fetchOHLCV'
                 }
-                store_dataframe(cache_key, df, metadata=metadata, timeframe=timeframe)
-            
+                # TTL for historical data can be longer, e.g., 1 hour (3600s) or more
+                # For frequently updated candles (e.g. 1m, 5m), TTL might be shorter
+                # Default TTL in store_dataframe is 1 day if not specified by cache_service
+                store_dataframe(cache_key, df, metadata=metadata, timeframe=ccxt_timeframe, ttl=3600) 
             return df
-            
+
+        except ccxt.NetworkError as e:
+            logger.error(f"CCXT NetworkError fetching OHLCV for {normalized_symbol}: {str(e)}", exc_info=True)
+        except ccxt.ExchangeError as e:
+            logger.error(f"CCXT ExchangeError fetching OHLCV for {normalized_symbol}: {str(e)}", exc_info=True)
         except Exception as e:
-            raise Exception(f"Error fetching OHLC data: {str(e)}")
-    
-    def fetch_historical_price_volume(
-        self, 
-        coin_id: str = 'bitcoin', 
-        vs_currency: str = 'usd',
-        days: Union[int, str] = 30,
-        interval: Optional[str] = None,
-        use_cache: bool = True
-    ) -> pd.DataFrame:
-        """
-        Fetch historical price and volume data for a specified coin and convert to OHLCV format.
-        This method uses market_chart endpoint which provides prices and volumes but not OHLC directly.
+            logger.error(f"Unexpected error fetching OHLCV for {normalized_symbol}: {str(e)}", exc_info=True)
         
-        Args:
-            coin_id: CoinGecko coin ID (default: 'bitcoin')
-            vs_currency: Quote currency (default: 'usd')
-            days: Number of days to look back (default: 30)
-            interval: Data interval - for days > 90, must be 'daily' (default: None)
-            use_cache: Whether to use cached data if available (default: True)
-            
-        Returns:
-            pandas.DataFrame: OHLCV data with columns [open, high, low, close, volume]
-        """
-        # Determine timeframe for caching
-        timeframe = self._get_timeframe_from_days(days)
-        
-        # Generate cache key
-        cache_key = f"market_chart_{coin_id}_{vs_currency}_{timeframe}_{days}"
-        if interval:
-            cache_key += f"_{interval}"
-        
-        # Try to get from cache first if use_cache is True
-        if use_cache:
-            cached_df = get_cached_dataframe(cache_key)
-            if cached_df is not None:
-                return cached_df
-        
-        try:
-            # Get market chart data
-            market_data = self._handle_api_call(
-                self.cg.get_coin_market_chart_by_id,
-                id=coin_id,
-                vs_currency=vs_currency,
-                days=days,
-                interval=interval
-            )
-            
-            # Extract price and volume data
-            prices = market_data['prices']
-            volumes = market_data['total_volumes']
-            
-            # Create DataFrames
-            df_prices = pd.DataFrame(prices, columns=['timestamp', 'price'])
-            df_volumes = pd.DataFrame(volumes, columns=['timestamp', 'volume'])
-            
-            # Convert timestamps from milliseconds to datetime
-            df_prices['timestamp'] = pd.to_datetime(df_prices['timestamp'], unit='ms')
-            df_volumes['timestamp'] = pd.to_datetime(df_volumes['timestamp'], unit='ms')
-            
-            # Resample to the desired interval to create OHLC
-            df_prices.set_index('timestamp', inplace=True)
-            
-            # Determine appropriate resampling frequency based on input days
-            if days == 1:
-                freq = '5min'  # 5-minute intervals for 1 day
-            elif days <= 7:
-                freq = '1h'    # Hourly for 2-7 days
-            elif days <= 30:
-                freq = '4h'    # 4-hour intervals for 8-30 days
-            else:
-                freq = '1D'    # Daily for >30 days
-            
-            # Resample to get OHLC
-            ohlc = df_prices['price'].resample(freq).ohlc()
-            
-            # Merge with volume data
-            df_volumes.set_index('timestamp', inplace=True)
-            volume_resampled = df_volumes['volume'].resample(freq).sum()
-            
-            # Combine OHLC and volume
-            result = pd.concat([ohlc, volume_resampled], axis=1)
-            
-            # Store in cache if not empty
-            if not result.empty and use_cache:
-                # Update timeframe based on actual resampling frequency
-                if freq == '5min':
-                    cache_timeframe = '5m'
-                elif freq == '1h':
-                    cache_timeframe = '1h'
-                elif freq == '4h':
-                    cache_timeframe = '4h'
-                elif freq == '1D':
-                    cache_timeframe = '1d'
-                else:
-                    cache_timeframe = timeframe
-                
-                metadata = {
-                    'coin_id': coin_id,
-                    'vs_currency': vs_currency,
-                    'days': days,
-                    'interval': interval,
-                    'resampled_freq': freq,
-                    'source': 'coingecko',
-                    'endpoint': 'market_chart'
-                }
-                store_dataframe(cache_key, result, metadata=metadata, timeframe=cache_timeframe)
-            
-            return result
-        
-        except Exception as e:
-            raise Exception(f"Error fetching historical price and volume data: {str(e)}")
-    
-    def _get_timeframe_from_days(self, days: Union[int, str]) -> str:
-        """
-        Determine the appropriate timeframe string based on the number of days.
-        
-        Args:
-            days: Number of days to look back
-            
-        Returns:
-            str: Timeframe string (1m, 5m, 1h, 1d, etc.)
-        """
-        if days == 1:
-            return "5m"
-        elif days <= 7:
-            return "1h"
-        elif days <= 30:
-            return "4h"
-        else:
-            return "1d"
-    
-    def fetch_data_by_timeframe(
+        return pd.DataFrame() # Return empty DataFrame on error
+
+    def get_current_price_data(
         self,
-        timeframe: str = '1d',
-        coin_id: str = 'bitcoin',
-        vs_currency: str = 'usd',
-        limit: int = 100,
-        use_cache: bool = True
-    ) -> pd.DataFrame:
+        symbol: str,
+        use_cache: bool = True,
+        cache_ttl_seconds: int = 300 # 5 minutes for current price
+    ) -> Dict[str, Any]:
         """
-        Fetch historical data for a specific timeframe.
-        
+        Fetch current price data for a symbol from OKX.
+
         Args:
-            timeframe: Time interval ('1h', '4h', '1d', etc.)
-            coin_id: CoinGecko coin ID (default: 'bitcoin')
-            vs_currency: Quote currency (default: 'usd')
-            limit: Number of candles to fetch (default: 100)
-            use_cache: Whether to use cached data if available (default: True)
-            
+            symbol: Trading pair symbol (e.g., 'BTC/USDT', 'BTC-USDT').
+            use_cache: Whether to use cached data.
+            cache_ttl_seconds: TTL for the cache.
+
         Returns:
-            pandas.DataFrame: OHLCV data for the specified timeframe
-            
-        Raises:
-            ValueError: If timeframe is not supported
-        """
-        # Map timeframes to days and resampling frequencies
-        timeframe_map = {
-            '5m': {'days': 1, 'freq': '5min'},
-            '15m': {'days': 1, 'freq': '15min'},
-            '30m': {'days': 1, 'freq': '30min'},
-            '1h': {'days': 7, 'freq': '1h'},
-            '2h': {'days': 14, 'freq': '2h'},
-            '4h': {'days': 30, 'freq': '4h'},
-            '6h': {'days': 30, 'freq': '6h'},
-            '12h': {'days': 60, 'freq': '12h'},
-            '1d': {'days': 365, 'freq': '1D'},
-            '3d': {'days': 365, 'freq': '3D'},
-            '1w': {'days': 365, 'freq': '1W'},
-        }
-        
-        if timeframe not in timeframe_map:
-            raise ValueError(f"Unsupported timeframe: {timeframe}. Supported timeframes: {list(timeframe_map.keys())}")
-        
-        # Generate cache key
-        cache_key = f"data_{coin_id}_{vs_currency}_{timeframe}_{limit}"
-        
-        # Try to get from cache first if use_cache is True
-        if use_cache:
-            cached_df = get_cached_dataframe(cache_key)
-            if cached_df is not None:
-                return cached_df
-        
-        # Get configuration for timeframe
-        config = timeframe_map[timeframe]
-        days = config['days']
-        freq = config['freq']
-        
-        # For shorter timeframes, use market_chart endpoint
-        if timeframe in ['5m', '15m', '30m', '1h', '2h', '4h', '6h', '12h']:
-            # Calculate days needed based on limit and frequency
-            if isinstance(days, int) and days < (limit * int(freq[0]) / 24):
-                days = max(days, int(limit * int(freq[0]) / 24) + 1)
-            
-            df = self.fetch_historical_price_volume(
-                coin_id=coin_id,
-                vs_currency=vs_currency,
-                days=days,
-                use_cache=use_cache
-            )
-            
-            # Check if df already has OHLC columns
-            # fetch_historical_price_volume() can return two different structures:
-            # 1. For most cases, it returns a DataFrame with OHLC columns already computed
-            # 2. In some edge cases, it might return a DataFrame with only 'price' column
-            # This check handles both cases to avoid KeyError when 'price' column doesn't exist
-            required_columns = ['open', 'high', 'low', 'close']
-            if all(col in df.columns for col in required_columns):
-                # DataFrame already has OHLC format, use as is
-                pass
-            else:
-                # Resample to the desired frequency
-                if df.index.freq != freq:
-                    # THIS WOULD FAIL if 'price' column doesn't exist (for shorter timeframes)
-                    # The problem that previously occurred was that fetch_historical_price_volume
-                    # actually performs resampling internally for shorter timeframes (5m, 15m, etc.)
-                    # and already returns a DataFrame with OHLC columns, not a 'price' column.
-                    # Meanwhile, for daily timeframes, we use fetch_historical_ohlc which has
-                    # a different data processing flow.
-                    # This inconsistency in data structures between timeframes caused the KeyError.
-                    df = df['price'].resample(freq).ohlc()
-                    # Since we resampled, we need to get volume data again
-                    volume_data = self.fetch_historical_price_volume(
-                        coin_id=coin_id,
-                        vs_currency=vs_currency,
-                        days=days,
-                        use_cache=use_cache
-                    )
-                    volume_resampled = volume_data['volume'].resample(freq).sum()
-                    df = pd.concat([df, volume_resampled], axis=1)
-        
-        # For daily and longer timeframes, use OHLC endpoint
-        else:
-            # For daily timeframes, ensure we don't exceed API limits
-            # CoinGecko API free tier allows max 365 days of historical data
-            if days > 365:
-                days = 365
-                
-            df = self.fetch_historical_ohlc(
-                coin_id=coin_id,
-                vs_currency=vs_currency,
-                days=days,
-                use_cache=use_cache
-            )
-            
-            # Resample if needed
-            if freq != '1D':
-                df = df.resample(freq).agg({
-                    'open': 'first',
-                    'high': 'max',
-                    'low': 'min',
-                    'close': 'last',
-                    'volume': 'sum'
-                })
-        
-        # Limit the number of rows and store in cache
-        result_df = df.tail(limit)
-        
-        # Store in cache if not empty and not already cached
-        if not result_df.empty and use_cache:
-            metadata = {
-                'coin_id': coin_id,
-                'vs_currency': vs_currency,
-                'timeframe': timeframe,
-                'limit': limit,
-                'source': 'coingecko'
+            Dictionary with current price information or empty dict on error.
+            Example structure:
+            {
+                'symbol': 'BTC/USDT',
+                'current_price': 60000.0,
+                'price_change_percentage_24h': 1.5, (if available)
+                'volume_24h': 10000.0, (if available)
+                'last_updated': 'YYYY-MM-DDTHH:MM:SS.sssZ',
+                'raw_ticker': {...} # Full ticker data from ccxt
             }
-            store_dataframe(cache_key, result_df, metadata=metadata, timeframe=timeframe)
+        """
+        normalized_symbol = self._normalize_symbol_for_ccxt(symbol)
+        cache_key = f"current_price_{self.exchange_name}_{normalized_symbol.replace('/', '_')}"
         
-        # Limit the number of rows
-        return result_df
+        logger.info(f"Fetching current price for {normalized_symbol}, use_cache: {use_cache}")
+        logger.debug(f"Cache key for current price: {cache_key}")
+
+        if use_cache:
+            cached_data = get_cached_json_data(cache_key)
+            if cached_data:
+                logger.info(f"Cache hit for current price {cache_key}. Returning cached data.")
+                return cached_data
+            logger.debug(f"Cache miss for current price {cache_key}.")
+
+        try:
+            if not self.exchange.has['fetchTicker']:
+                logger.error(f"{self.exchange_name} does not support fetchTicker via CCXT.")
+                return {}
+
+            logger.debug(f"Calling CCXT: fetch_ticker for {normalized_symbol}")
+            ticker_data = self.exchange.fetch_ticker(normalized_symbol)
+
+            if not ticker_data:
+                logger.warning(f"No ticker data returned from {self.exchange_name} for {normalized_symbol}.")
+                return {}
+
+            # Adapt to a common structure
+            price_data = {
+                'symbol': normalized_symbol,
+                'current_price': ticker_data.get('last'),
+                'price_change_percentage_24h': ticker_data.get('percentage'), # CCXT often provides this
+                'volume_24h': ticker_data.get('baseVolume'), # Volume in base currency
+                'quote_volume_24h': ticker_data.get('quoteVolume'), # Volume in quote currency
+                'last_updated': datetime.fromtimestamp(ticker_data['timestamp'] / 1000, tz=timezone.utc).isoformat() if ticker_data.get('timestamp') else datetime.now(timezone.utc).isoformat(),
+                'raw_ticker': ticker_data
+            }
+            
+            # Clean None values for cleaner output, but keep them in raw_ticker
+            price_data_cleaned = {k: v for k, v in price_data.items() if v is not None or k == 'raw_ticker'}
 
 
-# Convenience functions to use the DataFetcher class
+            if use_cache:
+                store_json_data(cache_key, price_data_cleaned, ttl=cache_ttl_seconds)
+            
+            logger.info(f"Current price for {normalized_symbol} fetched: {price_data_cleaned.get('current_price')}")
+            return price_data_cleaned
+
+        except ccxt.NetworkError as e:
+            logger.error(f"CCXT NetworkError fetching ticker for {normalized_symbol}: {str(e)}", exc_info=True)
+        except ccxt.ExchangeError as e:
+            logger.error(f"CCXT ExchangeError fetching ticker for {normalized_symbol}: {str(e)}", exc_info=True)
+        except Exception as e:
+            logger.error(f"Unexpected error fetching ticker for {normalized_symbol}: {str(e)}", exc_info=True)
+
+        return {}
+
+# Wrapper functions to maintain compatibility with existing calls if needed,
+# or these can be refactored away if the CLI calls DataFetcher methods directly.
+
+_data_fetcher_instance = None
+
+def get_data_fetcher_instance() -> DataFetcher:
+    """Returns a singleton instance of DataFetcher."""
+    global _data_fetcher_instance
+    if _data_fetcher_instance is None:
+        _data_fetcher_instance = DataFetcher(exchange_name="okx")
+    return _data_fetcher_instance
+
 def get_historical_data(
-    symbol: str = 'BTC',
+    symbol: str = 'BTC/USDT', # Expects CCXT format now
     timeframe: str = '1d',
-    limit: int = 100,
+    limit: int = 100, # Number of candles
     use_cache: bool = True,
-    vs_currency: str = 'usd'
+    # vs_currency is not directly used by CCXT as symbol contains quote
 ) -> pd.DataFrame:
     """
-    Get historical OHLCV data for a cryptocurrency.
-    
-    Args:
-        symbol: Cryptocurrency symbol (default: 'BTC')
-        timeframe: Time interval ('1h', '4h', '1d', etc.) (default: '1d')
-        limit: Number of candles to fetch (default: 100)
-        use_cache: Whether to use cached data if available (default: True)
-        vs_currency: Currency to calculate prices against (default: 'usd')
-        
-    Returns:
-        pandas.DataFrame: OHLCV data with columns [open, high, low, close, volume]
+    High-level function to get historical OHLCV data using the DataFetcher.
+    Symbol should be in CCXT format like 'BTC/USDT'.
     """
-    # Map symbol to CoinGecko ID
-    symbol_map = {
-        'BTC': 'bitcoin',
-        'ETH': 'ethereum',
-        'XRP': 'ripple',
-        'LTC': 'litecoin',
-        'BCH': 'bitcoin-cash',
-        'BNB': 'binancecoin',
-        'DOT': 'polkadot',
-        'LINK': 'chainlink',
-        'ADA': 'cardano',
-        'SOL': 'solana',
-    }
-    
-    coin_id = symbol_map.get(symbol, 'bitcoin')
-    
-    fetcher = DataFetcher()
-    df = fetcher.fetch_data_by_timeframe(
-        timeframe=timeframe,
-        coin_id=coin_id,
-        vs_currency=vs_currency,
-        limit=limit,
-        use_cache=use_cache
-    )
-    
-    return df
+    fetcher = get_data_fetcher_instance()
+    # 'since' parameter can be added here if complex pagination or specific start date is needed.
+    # For simplicity, current implementation fetches `limit` most recent candles.
+    return fetcher.fetch_historical_ohlcv(symbol, timeframe, limit, use_cache=use_cache)
 
-def invalidate_price_cache(
-    symbol: str = 'BTC',
-    timeframe: str = '1d'
-) -> bool:
-    """
-    Invalidate the cache for a specific symbol and timeframe.
-    
-    Args:
-        symbol: Cryptocurrency symbol (default: 'BTC')
-        timeframe: Time interval ('1h', '4h', '1d', etc.) (default: '1d')
-        
-    Returns:
-        bool: True if cache was invalidated, False otherwise
-    """
-    # Map symbol to CoinGecko ID
-    symbol_map = {
-        'BTC': 'bitcoin',
-        'ETH': 'ethereum',
-        'XRP': 'ripple',
-        'LTC': 'litecoin',
-        'BCH': 'bitcoin-cash',
-        'BNB': 'binancecoin',
-        'DOT': 'polkadot',
-        'LINK': 'chainlink',
-        'ADA': 'cardano',
-        'SOL': 'solana',
-    }
-    
-    coin_id = symbol_map.get(symbol, 'bitcoin')
-    
-    # Generate cache key pattern (partial match)
-    cache_key_pattern = f"data_{coin_id}_usd_{timeframe}"
-    
-    # Actually we need multiple invalidations since we have different cache keys
-    invalidated = invalidate_cache(cache_key_pattern)
-    
-    return invalidated
 
 def get_current_price(
-    symbol: str = 'BTC',
+    symbol: str = 'BTC/USDT', # Expects CCXT format
     force_refresh: bool = False,
-    vs_currency: str = 'usd'
+    # vs_currency is not directly used by CCXT
 ) -> Dict[str, Any]:
     """
-    Get current price data for a specific cryptocurrency.
-    
-    Args:
-        symbol: Cryptocurrency symbol (default: 'BTC')
-        force_refresh: Whether to force refresh data from API instead of using cache
-        vs_currency: Currency to calculate prices against (default: 'usd')
-        
-    Returns:
-        Dict: Current price and related data
+    High-level function to get current price data using the DataFetcher.
+    Symbol should be in CCXT format like 'BTC/USDT'.
     """
-    # Map symbols to CoinGecko IDs
-    symbol_map = {
-        'BTC': 'bitcoin',
-        'ETH': 'ethereum',
-        'SOL': 'solana',
-        'ADA': 'cardano',
-        'DOT': 'polkadot',
-        'AVAX': 'avalanche-2',
-        'LINK': 'chainlink',
-        'UNI': 'uniswap',
-        'AAVE': 'aave',
-        'MATIC': 'polygon',
-        'DOGE': 'dogecoin',
-        'SHIB': 'shiba-inu'
-    }
+    fetcher = get_data_fetcher_instance()
+    use_cache = not force_refresh
+    return fetcher.get_current_price_data(symbol, use_cache=use_cache)
+
+def invalidate_price_cache(symbol: str = 'BTC/USDT', timeframe: str = '1d', limit: int = 100) -> bool:
+    """
+    Invalidates a specific cache entry.
+    Note: This is a placeholder. Actual cache invalidation might need more specific
+    cache key construction matching that in fetch_historical_ohlcv or get_current_price_data.
+    The cache_service module itself might be better suited for direct invalidation calls.
+    For now, it's illustrative.
+    """
+    # This needs to be more robust if used, constructing the exact cache key.
+    # For current price:
+    # cache_key = f"current_price_okx_{symbol.replace('/', '_')}"
+    # For historical:
+    # cache_key = f"ohlcv_okx_{symbol.replace('/', '_')}_{timeframe}_{limit}"
+    # from .cache_service import invalidate_cache_item # Assuming such a function exists
+    # return invalidate_cache_item(cache_key)
+    logger.warning("invalidate_price_cache is a placeholder and not fully implemented for specific keys.")
+    return False
+
+# Example usage (for testing purposes)
+if __name__ == '__main__':
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     
-    # Default to 'bitcoin' if symbol not in map
-    coin_id = symbol_map.get(symbol.upper(), 'bitcoin')
+    # Test with .env file having OKX_API_KEY, OKX_SECRET_KEY, OKX_PASSWORD (optional)
+    # Create a dummy .env for testing if you don't want to use real keys
+    # with open(".env", "w") as f:
+    #     f.write("OKX_API_KEY=\"your_test_key_if_public_endpoints_are_not_enough\"\n")
+    #     f.write("OKX_SECRET_KEY=\"your_test_secret_if_public_endpoints_are_not_enough\"\n")
+    #     f.write("OKX_PASSWORD=\"your_test_password_if_needed\"\n")
+
+    test_symbol = 'BTC/USDT'
+    test_timeframe = '1h'
+    test_limit = 5
+
+    print(f"--- Testing DataFetcher with {test_symbol} ---")
+
+    # --- Test get_current_price ---
+    print(f"\n--- Fetching current price for {test_symbol} ---")
+    current_price_data = get_current_price(test_symbol, force_refresh=True)
+    if current_price_data:
+        print(f"Current Price for {test_symbol}: {current_price_data.get('current_price')}")
+        print(f"Last Updated: {current_price_data.get('last_updated')}")
+        print(f"Full raw ticker (first 200 chars): {str(current_price_data.get('raw_ticker'))[:200]}...")
+    else:
+        print(f"Could not fetch current price for {test_symbol}.")
+
+    # --- Test get_historical_data ---
+    print(f"\n--- Fetching historical OHLCV for {test_symbol} ({test_timeframe}, limit {test_limit}) ---")
+    historical_df = get_historical_data(test_symbol, timeframe=test_timeframe, limit=test_limit, use_cache=False)
+    if not historical_df.empty:
+        print(f"Historical Data for {test_symbol}:")
+        print(historical_df.head())
+        print("...")
+        print(historical_df.tail())
+        print(f"Shape: {historical_df.shape}")
+    else:
+        print(f"Could not fetch historical data for {test_symbol}.")
+
+    # --- Test with a different symbol or timeframe ---
+    test_symbol_eth = 'ETH/USDT'
+    test_timeframe_daily = '1d'
+    test_limit_daily = 3
+    print(f"\n--- Fetching historical OHLCV for {test_symbol_eth} ({test_timeframe_daily}, limit {test_limit_daily}) ---")
+    historical_df_eth = get_historical_data(test_symbol_eth, timeframe=test_timeframe_daily, limit=test_limit_daily, use_cache=True) # Test cache
+    if not historical_df_eth.empty:
+        print(f"Historical Data for {test_symbol_eth}:")
+        print(historical_df_eth)
+    else:
+        print(f"Could not fetch historical data for {test_symbol_eth}.")
     
-    # Generate cache key
-    cache_key = f"price_{coin_id}_{vs_currency}_current"
-    
-    # Check cache first if not forcing refresh
-    if not force_refresh:
-        cached_data = get_cached_json_data(cache_key)
-        if cached_data is not None:
-            # Check if the cached data is less than 5 minutes old
-            cached_time = cached_data.get('metadata', {}).get('timestamp', '')
-            if cached_time:
-                cache_time = datetime.fromisoformat(cached_time)
-                if datetime.now() - cache_time < timedelta(minutes=5):
-                    logger.debug(f"Using cached price data for {symbol} (age: {(datetime.now() - cache_time).total_seconds() / 60:.1f} minutes)")
-                    return cached_data.get('data', {})
-    
-    try:
-        # Initialize DataFetcher and fetch data
-        fetcher = DataFetcher()
-        
-        logger.debug(f"Fetching price data for {symbol} ({coin_id}) from CoinGecko API")
-        
-        # Fetch price data from CoinGecko
-        price_data = fetcher._handle_api_call(
-            fetcher.cg.get_coin_by_id,
-            id=coin_id,
-            localization=False,
-            tickers=False,
-            market_data=True,
-            community_data=False,
-            developer_data=False,
-            sparkline=False
-        )
-        
-        # Add detailed debug logging for troubleshooting
-        if price_data and 'market_data' in price_data:
-            market_data = price_data['market_data']
-            
-            # Log specific relevant price fields
-            debug_data = {
-                'current_price': market_data.get('current_price', {}),
-                'market_cap': market_data.get('market_cap', {}),
-                'last_updated': market_data.get('last_updated', ''),
-                'price_change_24h': market_data.get('price_change_24h', 0)
-            }
-            logger.debug(f"Raw price data for {symbol} from CoinGecko API: {json.dumps(debug_data, indent=2)}")
-            
-            # Log specific currency values and flag suspicious prices
-            if 'current_price' in market_data:
-                prices = market_data['current_price']
-                for currency, value in prices.items():
-                    if currency == 'usd':
-                        logger.debug(f"{symbol} price in {currency}: {value}")
-                        
-                    # Flag suspiciously high prices
-                    if currency == 'usd' and value > 90000:
-                        logger.warning(f"Suspiciously high {currency} price for {symbol}: {value}")
-                    elif currency == 'usd' and value < 1000 and symbol.upper() == 'BTC':
-                        logger.warning(f"Suspiciously low {currency} price for {symbol}: {value}")
-            
-            # Extract only the market data
-            market_data = price_data['market_data']
-            
-            # Store in cache
-            metadata = {
-                'coin_id': coin_id,
-                'symbol': symbol,
-                'vs_currency': vs_currency,
-                'source': 'coingecko',
-                'endpoint': 'coin_by_id',
-                'timestamp': datetime.now().isoformat()
-            }
-            store_json_data(cache_key, market_data, metadata=metadata)
-            
-            return market_data
-        else:
-            logger.error(f"No market data available in API response for {symbol}")
-            raise Exception(f"No market data available for {symbol}")
-        
-    except Exception as e:
-        # Log the error details
-        logger.error(f"Error fetching current price for {symbol}: {str(e)}")
-        
-        # If error occurs and we have cached data, return that even if it's old
-        cached_data = get_cached_json_data(cache_key)
-        if cached_data is not None:
-            logger.warning(f"Falling back to cached data for {symbol} due to API error: {str(e)}")
-            return cached_data.get('data', {})
-        else:
-            logger.error(f"No cached data available for {symbol} after API error")
-            raise Exception(f"Error fetching current price and no cached data available: {str(e)}") 
+    # Test fetching again to ensure cache works (if TTL is long enough and data was stored)
+    print(f"\n--- Fetching historical OHLCV for {test_symbol_eth} ({test_timeframe_daily}, limit {test_limit_daily}) AGAIN (testing cache) ---")
+    historical_df_eth_cached = get_historical_data(test_symbol_eth, timeframe=test_timeframe_daily, limit=test_limit_daily, use_cache=True)
+    if not historical_df_eth_cached.empty:
+        print(f"Historical Data for {test_symbol_eth} (cached):")
+        print(historical_df_eth_cached)
+    else:
+        print(f"Could not fetch historical data for {test_symbol_eth} (cached).")
+
+    # Clean up dummy .env if created for testing
+    # import os
+    # if os.path.exists(".env") and "your_test_key" in open(".env").read():
+    #     os.remove(".env")
+    #     print("\nRemoved dummy .env file.") 

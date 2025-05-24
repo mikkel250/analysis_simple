@@ -65,10 +65,6 @@ This document provides a comprehensive explanation of all patterns in the projec
 - `.mypy_cache/`: Cache directory for mypy type checker.
 - `.dmypy.json`: dmypy (mypy daemon) status file.
 
-## Jupyter Notebook
-
-- `.ipynb_checkpoints/`: Jupyter Notebook autosave files.
-
 ## Project Specific Files
 
 This section can be expanded to include any project-specific files that should be ignored but don't fit into the categories above. 

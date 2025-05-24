@@ -53,20 +53,41 @@ def load_from_env(exchange: str = DEFAULT_EXCHANGE) -> Dict[str, str]:
     
     # Special handling for OKX which uses a different variable format
     if exchange.lower() == "okx":
-        api_key = os.environ.get("apikey")
-        api_secret = os.environ.get("secretkey")
-        if api_key and api_secret:
-            # Strip quotes if present (e.g. apikey='key' -> key)
-            if api_key.startswith("'") and api_key.endswith("'"):
-                api_key = api_key[1:-1]
-            if api_secret.startswith("'") and api_secret.endswith("'"):
-                api_secret = api_secret[1:-1]
-                
-            logger.info(f"Found OKX API credentials in environment variables")
-            return {
-                "api_key": api_key,
-                "api_secret": api_secret
+        # Standard ccxt names for environment variables
+        api_key_env = os.environ.get("OKX_API_KEY")
+        api_secret_env = os.environ.get("OKX_SECRET_KEY")
+        api_password_env = os.environ.get("OKX_PASSWORD") # Passphrase
+
+        if api_key_env and api_secret_env:
+            logger.info(f"Found OKX API credentials (OKX_API_KEY, OKX_SECRET_KEY) in environment variables.")
+            creds_for_ccxt = {
+                "apiKey": api_key_env, # ccxt expects apiKey
+                "secret": api_secret_env, # ccxt expects secret
             }
+            if api_password_env:
+                creds_for_ccxt["password"] = api_password_env # ccxt expects password for passphrase
+                logger.info(f"Found OKX_PASSWORD in environment variables.")
+            return creds_for_ccxt
+        else:
+            # Fallback to old lowercase names if new ones are not found, for backward compatibility during transition
+            # This part can be removed later once .env files are updated.
+            logger.debug("OKX_API_KEY/SECRET_KEY not found, trying legacy 'apikey'/'secretkey'")
+            api_key_legacy = os.environ.get("apikey")
+            api_secret_legacy = os.environ.get("secretkey")
+            if api_key_legacy and api_secret_legacy:
+                logger.info(f"Found OKX API credentials (legacy 'apikey', 'secretkey') in environment variables.")
+                # Strip quotes if present (e.g. apikey='key' -> key) - this was from old logic
+                if api_key_legacy.startswith("'") and api_key_legacy.endswith("'"):
+                    api_key_legacy = api_key_legacy[1:-1]
+                if api_secret_legacy.startswith("'") and api_secret_legacy.endswith("'"):
+                    api_secret_legacy = api_secret_legacy[1:-1]
+                return {
+                    "apiKey": api_key_legacy,
+                    "secret": api_secret_legacy,
+                    # No password handling for legacy names, assume it wasn't used with them
+                }
+            logger.warning("No OKX API credentials found in environment variables (tried OKX_API_KEY/SECRET & legacy apikey/secretkey).")
+            return {}
     
     # Standard format for other exchanges
     exchange_upper = exchange.upper()
@@ -166,29 +187,40 @@ def get_api_credentials(exchange: str = DEFAULT_EXCHANGE) -> Dict[str, str]:
         exchange: The exchange to get credentials for
         
     Returns:
-        Dict containing API key and secret
+        Dict containing API key and secret (using 'apiKey', 'secret', 'password' for ccxt)
     """
     # Normalize exchange name
     exchange_lower = exchange.lower()
-    if exchange_lower not in SUPPORTED_EXCHANGES:
-        logger.warning(f"Unsupported service: {exchange}, falling back to {DEFAULT_EXCHANGE} behavior or attempting generic load.")
-        if exchange_lower != "coingecko":
-             exchange_lower = DEFAULT_EXCHANGE.lower()
-    
+    # We don't need to check SUPPORTED_EXCHANGES here as load_from_env handles it
+    # and ccxt will error out if the exchange name is truly invalid.
+
     # Try environment variables first
-    credentials = load_from_env(exchange_lower)
-    if credentials and credentials.get("api_key"):
-        logger.info(f"Using {exchange_lower} API credentials from environment variables")
+    # load_from_env is already designed to return the ccxt-expected format for OKX
+    # and a more generic format for others (which might need adjustment if we standardize all to ccxt)
+    credentials = load_from_env(exchange_lower) 
+
+    # Check if credentials were successfully loaded from environment
+    # For OKX (and ccxt in general), we expect 'apiKey' and 'secret'
+    expected_key_field = 'apiKey' if exchange_lower == 'okx' else 'api_key'
+
+    if credentials and credentials.get(expected_key_field):
+        logger.info(f"Using {exchange_lower} API credentials from environment variables.")
         return credentials
         
     # Fall back to config file
-    credentials = load_from_file(exchange_lower)
-    if credentials and credentials.get("api_key"):
-        logger.info(f"Using {exchange_lower} API credentials from config file")
-        return credentials
+    # load_from_file might also need adjustment if it doesn't return ccxt format for OKX
+    logger.debug(f"Credentials not found or incomplete in environment for {exchange_lower}, trying config file.")
+    credentials_file = load_from_file(exchange_lower)
+    
+    if credentials_file and credentials_file.get(expected_key_field): # Check using the same expected key field
+        logger.info(f"Using {exchange_lower} API credentials from config file.")
+        # If OKX and from file, ensure it's in ccxt format.
+        # This part needs care if file format is different from env format.
+        # For now, assuming load_from_file for OKX would also be ccxt-like if intended for ccxt.
+        return credentials_file
         
     # No credentials found
-    logger.warning(f"No API credentials found for {exchange_lower}")
+    logger.warning(f"No API credentials found for {exchange_lower} in environment or config file.")
     return {}
 
 def validate_credentials(credentials: Dict[str, str]) -> bool:

@@ -1,7 +1,6 @@
 <frozen runpy>:128: RuntimeWarning: 'src.cli.commands.analyzer' found in sys.modules after import of package 'src.cli.commands', but prior to execution of 'src.cli.commands.analyzer'; this may result in unpredictable behaviour
 📊 Market Analyzer: Comprehensive market analysis using multiple timeframes
 Analyzing BTC with medium timeframe...
-INFO:src.jupyter.market_analyzer:Initialized MarketAnalyzer for BTC with medium timeframe
 INFO:root:Output will be saved to: /Users/mikkel250/coding/analysis_simple/saved_analysis/txt/BTC_medium_20250506_220100.txt
 INFO:src.jupyter.market_analyzer:Fetching data for BTC with interval=4h, period=3mo
 INFO:src.jupyter.market_analyzer:Running analysis for BTC

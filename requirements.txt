@@ -1,6 +1,6 @@
 # Core dependencies
 pandas>=2.0.0
-numpy>=1.24.0
+numpy==1.26.3
 pandas-ta>=0.3.14b0
 pytest>=7.0.0
 
@@ -12,10 +12,11 @@ humanize>=4.0.0
 
 # API dependencies
 ccxt>=4.0.0
+requests>=2.25.0
 
 # Data Fetching
-pycoingecko>=3.1.0
-yfinance>=0.2.35
+# pycoingecko>=3.1.0 # Removed, using ccxt for OKX
+# yfinance>=0.2.35 # REMOVED YFINANCE
 
 # Visualization dependencies
 matplotlib>=3.8.0
@@ -28,3 +29,6 @@ trendln
 # New dependency
 python-binance==1.0.19
 python-dotenv==1.0.0
+
+# Added ta-lib
+ta-lib

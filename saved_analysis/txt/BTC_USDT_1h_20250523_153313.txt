@@ -1,0 +1,31 @@
+╭───────── Analysis Report ─────────╮
+│ Market Analysis for BTC-USDT (1H) │
+╰───────────────────────────────────╯
+╭────────────────────────────────────── General Overview ───────────────────────────────────────╮
+│ Analysis for BTC-USDT (1h): Current price is 108439.00. The overall trend is considered       │
+│ 'bearish'. Volatility is N/A (0.00%).                                                         │
+╰───────────────────────────────────────────────────────────────────────────────────────────────╯
+╭──────────────────────────╮
+│ Market Scenarios & Cases │
+╰──────────────────────────╯
+Bearish Trend Continuation:
+  The current bearish trend may persist. Consider shorting opportunities on rallies or breakdowns
+below near-term support.
+  Confidence: medium
+  Key Levels: {'support_targets': ['107961.10', '107313.90'], 'resistance_stops': ['109000.00', 
+'109458.00']}
+  Potential Triggers: ['Break below nearest support', 'Negative volume confirmation']
+
+Potential Bullish Reversal:
+  If the current bearish pressure eases, a bullish reversal might be possible, particularly if 
+price reclaims key support or breaks resistance.
+  Confidence: low
+  Key Levels: {'support_to_hold': ['107961.10', '107313.90'], 'resistance_breakout': 
+['109000.00', '109458.00']}
+  Potential Triggers: ['Strong bounce from support', 'Breakout above key resistance with volume']
+
+╭───────────────────────────────────────── Disclaimer ──────────────────────────────────────────╮
+│ This analysis is for informational purposes only and does not constitute financial advice.    │
+│ Market conditions can change rapidly. Always do your own research (DYOR) before making any    │
+│ trading decisions.                                                                            │
+╰───────────────────────────────────────────────────────────────────────────────────────────────╯

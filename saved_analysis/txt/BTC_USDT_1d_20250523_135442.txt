@@ -1,0 +1,23 @@
+╭───────── Analysis Report ─────────╮
+│ Market Analysis for BTC-USDT (1D) │
+╰───────────────────────────────────╯
+╭──────────────────────────╮
+│ Market Scenarios & Cases │
+╰──────────────────────────╯
+Ranging or Indecisive Market:
+  The market appears to be in a consolidation or neutral
+phase. Trade ranges if clearly defined, or wait for a 
+clear breakout. Support and resistance levels are key to
+watch.
+  Confidence: low
+  Key Levels: {'support': ['101355.20', '100733.00'], 
+'resistance': ['109800.00']}
+  Potential Triggers: ['Breakout from range', 'Strong 
+volume spike indicating new interest']
+
+╭───────────────────── Disclaimer ─────────────────────╮
+│ This analysis is for informational purposes only and │
+│ does not constitute financial advice. Market         │
+│ conditions can change rapidly. Always do your own    │
+│ research (DYOR) before making any trading decisions. │
+╰──────────────────────────────────────────────────────╯

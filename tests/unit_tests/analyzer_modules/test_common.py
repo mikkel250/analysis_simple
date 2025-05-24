@@ -1,5 +1,8 @@
 import unittest
 from enum import Enum
+import pandas as pd
+import numpy as np
+from src.analysis.market_analyzer import MarketAnalyzer
 
 # Attempt to import from the new module structure
 # This might require PYTHONPATH adjustments or a project structure that supports this
@@ -57,6 +60,29 @@ class TestCommon(unittest.TestCase):
         self.assertEqual(OutputFormat("html"), OutputFormat.HTML)
         with self.assertRaises(ValueError):
             OutputFormat("invalid_format")
+
+    def test_zero_volatility_with_constant_prices(self):
+        """Test that zero volatility is correctly explained for constant prices."""
+        # Create a DataFrame with constant prices
+        dates = pd.date_range(end=pd.Timestamp.now(), periods=30, freq="1d")
+        constant_price = 100.0
+        df = pd.DataFrame({
+            'open': [constant_price] * 30,
+            'high': [constant_price] * 30,
+            'low': [constant_price] * 30,
+            'close': [constant_price] * 30,
+            'volume': [1000] * 30
+        }, index=dates)
+        # Initialize MarketAnalyzer with this data
+        analyzer = MarketAnalyzer(symbol="CONST", timeframe="1d", use_test_data=False)
+        analyzer.data = df.copy()
+        analyzer.run_analysis()
+        vol_summary = analyzer._get_volatility_summary()
+        self.assertIn("annualized_volatility_pct", vol_summary)
+        self.assertEqual(vol_summary["annualized_volatility_pct"], "0.00%")
+        self.assertIn("details", vol_summary)
+        self.assertIn("all prices were constant", vol_summary["details"])
+        self.assertIn("zero volatility value is only reasonable", vol_summary["details"])
 
 if __name__ == '__main__':
     unittest.main() 

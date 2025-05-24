@@ -5,422 +5,367 @@ This module provides functions for fetching, processing, and visualizing
 financial market data.
 """
 
-import datetime as dt
-from functools import lru_cache
-from typing import Dict, List, Union, Optional, Tuple, Any
+from typing import Dict, List, Optional, Any
 import logging
 
 import numpy as np
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-import yfinance as yf
+# import plotly.express as px # Currently unused
+# import plotly.graph_objects as go # Currently unused
 import pandas_ta as ta
-from src.services.indicators import get_indicator
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
-# Default visualization settings
-DEFAULT_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', 
+# Default visualization settings (May be unused if plotting functions are removed)
+DEFAULT_COLORS = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd',
                   '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
 
-# Data fetching functions
-@lru_cache(maxsize=128)
-def get_stock_data(
-    symbol: str, 
-    period: str = 'max', 
-    interval: str = '1d',
-    start: Optional[dt.datetime] = None,
-    end: Optional[dt.datetime] = None
-) -> pd.DataFrame:
+class MarketData:
     """
-    Fetch stock data using yfinance.
-    
-    Args:
-        symbol: Stock ticker symbol
-        period: Valid periods: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max
-        interval: Valid intervals: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
-        start: Start date for data fetching
-        end: End date for data fetching
-    
-    Returns:
-        DataFrame containing the stock data
+    Represents and processes market data for a specific symbol and timeframe.
     """
-    # Format cryptocurrency symbols correctly for Yahoo Finance
-    original_symbol = symbol
-    crypto_symbols = ["BTC", "ETH", "XRP", "LTC", "BCH", "ADA", "DOT", "LINK", "BNB", "DOGE"]
-    
-    if symbol in crypto_symbols and not "-USD" in symbol and not "/" in symbol:
-        symbol = f"{symbol}-USD"
-    
-    ticker = yf.Ticker(symbol)
-    
-    if start is not None and end is not None:
-        data = ticker.history(start=start, end=end, interval=interval)
-    else:
-        data = ticker.history(period=period, interval=interval)
-    
-    # Drop rows with NaN values and reset index
-    data = data.dropna()
-    
-    # If the data is empty, raise an exception
-    if data.empty:
-        raise ValueError(f"No data found for {symbol} with the given parameters")
-    
-    # Verify reasonable price range for Bitcoin (should be > $1,000)
-    if original_symbol == "BTC" and 'close' in data.columns:
-        last_price = data['Close'].iloc[-1] if 'Close' in data.columns else data['close'].iloc[-1]
-        if last_price < 1000:
-            # Price is suspiciously low for Bitcoin, try again with explicit BTC-USD
-            if symbol != "BTC-USD":
-                return get_stock_data("BTC-USD", period, interval, start, end)
-            else:
-                # If we're already using BTC-USD and still getting weird prices, log a warning
-                logger.warning(f"Bitcoin price suspiciously low: ${last_price:.2f}. Data may be incorrect.")
-    
-    # Convert column names to lowercase
-    data.columns = [col.lower() for col in data.columns]
-    
-    # Add symbol column
-    data['symbol'] = original_symbol
-    
-    return data
+    def __init__(self, data_df: pd.DataFrame, symbol: str, timeframe: str):
+        """
+        Initialize MarketData.
 
-def fetch_market_data(
-    symbol: str, 
-    period: str = 'max', 
-    interval: str = '1d',
-    start: Optional[dt.datetime] = None,
-    end: Optional[dt.datetime] = None
-) -> pd.DataFrame:
-    """
-    Fetch market data using yfinance (alias for get_stock_data).
-    
-    Args:
-        symbol: Trading symbol (e.g., 'BTC-USDT', 'ETH-USDT')
-        period: Valid periods: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max
-        interval: Valid intervals: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
-        start: Start date for data fetching
-        end: End date for data fetching
-    
-    Returns:
-        DataFrame containing the market data
-    """
-    logger.info(f"Fetching market data for {symbol} with interval={interval}, period={period}")
-    return get_stock_data(symbol=symbol, period=period, interval=interval, start=start, end=end)
+        Args:
+            data_df: DataFrame containing OHLCV data.
+            symbol: The trading symbol (e.g., 'BTC/USDT').
+            timeframe: The timeframe for the data (e.g., '1h', '1d').
+        """
+        if not isinstance(data_df, pd.DataFrame) or data_df.empty:
+            logger.error("MarketData initialized with empty or invalid DataFrame.")
+            # Potentially raise ValueError or handle appropriately
+            self.data = pd.DataFrame() # Initialize with empty DataFrame
+        else:
+            self.data = data_df.copy() # Ensure we work with a copy
+        
+        self.symbol = symbol
+        self.timeframe = timeframe
+        logger.info(f"MarketData initialized for {symbol} ({timeframe}) with {len(self.data)} rows.")
 
-def get_multiple_stocks(
-    symbols: List[str], 
-    period: str = 'max', 
-    interval: str = '1d',
-    start: Optional[dt.datetime] = None,
-    end: Optional[dt.datetime] = None
-) -> pd.DataFrame:
-    """
-    Fetch data for multiple stock symbols.
-    
-    Args:
-        symbols: List of stock ticker symbols
-        period: Valid periods: 1d, 5d, 1mo, 3mo, 6mo, 1y, 2y, 5y, 10y, ytd, max
-        interval: Valid intervals: 1m, 2m, 5m, 15m, 30m, 60m, 90m, 1h, 1d, 5d, 1wk, 1mo, 3mo
-        start: Start date for data fetching
-        end: End date for data fetching
-    
-    Returns:
-        DataFrame containing the combined stock data
-    """
-    dfs = []
-    for symbol in symbols:
+    def add_technical_indicators(
+        self,
+        indicators_config: Optional[Dict[str, Dict[str, Any]]] = None
+    ) -> None:
+        """
+        Add technical indicators to the internal DataFrame using pandas-ta.
+
+        Args:
+            indicators_config: Optional dictionary to specify indicators and their
+                               parameters. Example:
+                               {
+                                   'sma': {'lengths': [20, 50]},
+                                   'rsi': {'length': 14},
+                                   'macd': {'fast': 12, 'slow': 26, 'signal': 9}
+                               }
+        """
+        if self.data is None or self.data.empty:
+            logger.warning("DataFrame is empty or None, cannot add indicators.")
+            return
+
+        required_ohlc = ['open', 'high', 'low', 'close']
+        missing_cols = [col for col in required_ohlc if col not in self.data.columns]
+        if missing_cols:
+            logger.warning(
+                f"DataFrame for {self.symbol} ({self.timeframe}) is missing one or more required OHLC columns: "
+                f"{missing_cols}. Some indicators might fail."
+            )
+
+        default_indicators = {
+            'sma': {'lengths': [20, 50, 100, 200]},
+            'ema': {'lengths': [12, 26, 50]},
+            'rsi': {'length': 14},
+            'macd': {'fast': 12, 'slow': 26, 'signal': 9},
+            'bbands': {'length': 20, 'std': 2},
+            'atr': {'length': 14},
+            'obv': {},
+            'vwap': {},
+            'ichimoku': {'tenkan': 9, 'kijun': 26, 'senkou': 52, 'include_chikou': True},
+            'psar': {},
+            'willr': {'length': 14},
+            'cmf': {'length': 20},
+            'stoch': {'k': 14, 'd': 3},
+            'kc': {'length': 20, 'scalar': 2, 'mamode': 'ema'},
+            'cci': {'length': 20},
+        }
+
+        config = indicators_config if indicators_config is not None else default_indicators
+        logger.info(f"Adding technical indicators to {self.symbol} ({self.timeframe}) with config: {config}")
+
+        strategy_ta_list = []
+        if isinstance(config, dict):
+            for indicator_key, params in config.items():
+                study = {"kind": indicator_key}
+                study.update(params)
+                if indicator_key in ['sma', 'ema'] and 'lengths' in params:
+                    for length_val in params['lengths']:
+                        strategy_ta_list.append(
+                            {"kind": indicator_key, "length": length_val}
+                        )
+                elif indicator_key == 'ichimoku':
+                    strategy_ta_list.append({
+                        "kind": "ichimoku",
+                        "tenkan": params.get('tenkan', 9),
+                        "kijun": params.get('kijun', 26),
+                        "senkou": params.get('senkou', 52),
+                        "include_chikou": params.get('include_chikou', True) # Ensure chikou can be configured
+                    })
+                elif indicator_key == 'vwap':
+                    if 'volume' in self.data.columns:
+                        strategy_ta_list.append(study)
+                    else:
+                        logger.warning(
+                            f"VWAP requires 'volume' column for {self.symbol} ({self.timeframe}), "
+                            f"skipping VWAP strategy entry."
+                        )
+                elif indicator_key == 'obv':
+                    if 'volume' in self.data.columns:
+                        strategy_ta_list.append(study)
+                    else:
+                        logger.warning(
+                            f"OBV requires 'volume' column for {self.symbol} ({self.timeframe}), "
+                            f"skipping OBV strategy entry."
+                        )
+                elif indicator_key == 'cmf':
+                    if 'volume' in self.data.columns:
+                        strategy_ta_list.append(study)
+                    else:
+                        logger.warning(
+                            f"CMF requires 'volume' column for {self.symbol} ({self.timeframe}), "
+                            f"skipping CMF strategy entry."
+                        )
+                elif indicator_key == 'kc':
+                    # Keltner Channels require OHLC columns, which are already checked above
+                    strategy_ta_list.append(study)
+                else:
+                    strategy_ta_list.append(study)
+        else:
+            logger.error(f"Indicators config is not a dictionary: {config} for {self.symbol} ({self.timeframe})")
+
+        if not strategy_ta_list:
+            logger.warning(f"No valid TA studies configured for {self.symbol} ({self.timeframe}). Skipping indicator calculation.")
+            return
+
         try:
-            df = get_stock_data(symbol=symbol, period=period, interval=interval, 
-                               start=start, end=end)
-            dfs.append(df)
+            strategy = ta.Strategy(
+                name="MarketAnalysisStrategy",
+                description="Calculates a standard set of technical indicators.",
+                ta=strategy_ta_list
+            )
+            logger.debug(f"Applying pandas-ta strategy to {self.symbol} ({self.timeframe}): {strategy_ta_list}")
+            self.data.ta.strategy(strategy)
         except Exception as e:
-            print(f"Error fetching data for {symbol}: {e}")
-    
-    if not dfs:
-        raise ValueError("No data found for any of the provided symbols")
-    
-    return pd.concat(dfs)
+            logger.error(f"Error applying pandas-ta strategy to {self.symbol} ({self.timeframe}): {e}", exc_info=True)
 
-def get_market_index(index_symbol: str = '^GSPC', period: str = '1y') -> pd.DataFrame:
-    """
-    Fetch market index data (default is S&P 500).
-    
-    Args:
-        index_symbol: Market index symbol (default is S&P 500)
-        period: Time period to fetch
-    
-    Returns:
-        DataFrame containing the market index data
-    """
-    return get_stock_data(symbol=index_symbol, period=period)
+        logger.info(
+            f"DataFrame for {self.symbol} ({self.timeframe}) with indicators. Columns: {self.data.columns.tolist()}"
+        )
+
 
 # Data preprocessing functions
 def calculate_returns(
-    data: pd.DataFrame, 
-    price_col: str = 'close', 
+    data: pd.DataFrame,
+    price_col: str = 'close',
     return_type: str = 'log'
 ) -> pd.DataFrame:
     """
     Calculate returns from price data.
-    
+
     Args:
         data: DataFrame containing price data
         price_col: Column name containing price data
         return_type: Type of return to calculate ('log' or 'pct')
-    
+
     Returns:
         DataFrame with an additional column for returns
     """
-    df = data.copy()
-    
+    df_calc = data.copy() # Work with a copy
+
+    if price_col not in df_calc.columns:
+        logger.error(f"Price column '{price_col}' not found in DataFrame.")
+        return df_calc # Or raise error
+
+    if df_calc[price_col].isnull().all():
+        logger.warning(f"Price column '{price_col}' contains all NaNs. Cannot calculate returns.")
+        df_calc['return'] = np.nan
+        return df_calc
+
     if return_type == 'log':
-        df['return'] = np.log(df[price_col] / df[price_col].shift(1))
+        # Ensure no zero or negative prices for log returns
+        if (df_calc[price_col] <= 0).any():
+            logger.warning("Non-positive prices found. Log returns may be undefined or inaccurate. Proceeding with caution.")
+        # Replace non-positive with NaN before log to avoid errors, or handle as per strategy
+        # For simplicity, let log handle np.log(0) -> -inf, np.log(<0) -> nan
+        df_calc['return'] = np.log(df_calc[price_col] / df_calc[price_col].shift(1))
     else:  # 'pct'
-        df['return'] = df[price_col].pct_change()
-    
-    return df
+        df_calc['return'] = df_calc[price_col].pct_change()
+
+    return df_calc
+
 
 def calculate_rolling_statistics(
-    data: pd.DataFrame, 
-    column: str = 'close', 
+    data: pd.DataFrame,
+    column: str = 'close',
     windows: List[int] = [20, 50, 200]
 ) -> pd.DataFrame:
     """
     Calculate rolling mean and standard deviation.
-    
+
     Args:
         data: DataFrame containing price data
         column: Column name to calculate statistics for
         windows: List of window sizes for rolling calculations
-    
+
     Returns:
         DataFrame with additional columns for rolling statistics
     """
-    df = data.copy()
-    
+    df_calc = data.copy()
+
+    if column not in df_calc.columns:
+        logger.error(f"Column '{column}' for rolling stats not found.")
+        return df_calc
+
     for window in windows:
-        df[f'sma_{window}'] = df[column].rolling(window=window).mean()
-        df[f'std_{window}'] = df[column].rolling(window=window).std()
-    
-    return df
-
-def add_technical_indicators(
-    df: pd.DataFrame, 
-    window_size: int = 20,
-    price_col: str = 'close',
-    symbol: str = 'unknown',
-    timeframe: str = 'unknown'
-) -> pd.DataFrame:
-    """
-    Add technical indicators to the DataFrame using the central indicators service.
-    
-    Args:
-        df: DataFrame containing OHLCV data
-        window_size: Default window size for indicators if not overridden by specific params
-        price_col: Column name containing price data (typically 'close')
-        symbol: Symbol for caching purposes
-        timeframe: Timeframe for caching purposes
-    
-    Returns:
-        DataFrame with technical indicators
-    """
-    if df is None or df.empty:
-        raise ValueError("DataFrame is empty or None")
-    
-    required_ohlc = ['open', 'high', 'low', 'close']
-    if not all(col in df.columns for col in required_ohlc):
-        # Allow 'price_col' to be one of the ohlc columns if others are missing for specific indicators.
-        # get_indicator will handle specific column requirements.
-        pass # Further validation is implicitly handled by get_indicator or its sub-functions
-
-    df_out = df.copy()
-
-    indicator_configs = [
-        {'name': 'sma', 'params': {'length': window_size, 'column': price_col}, 'col_name': f'sma_{window_size}'},
-        {'name': 'ema', 'params': {'length': window_size, 'column': price_col}, 'col_name': f'ema_{window_size}'},
-        {'name': 'rsi', 'params': {'length': 14, 'column': price_col}, 'col_name': 'rsi_14'},
-        {'name': 'macd', 'params': {'fast': 12, 'slow': 26, 'signal': 9, 'column': price_col}, 
-         'multi_cols': {'MACD_12_26_9': 'MACD_12_26_9', 'MACDh_12_26_9': 'MACDh_12_26_9', 'MACDs_12_26_9': 'MACDs_12_26_9'}},
-        {'name': 'bbands', 'params': {'length': window_size, 'std': 2.0, 'column': price_col},
-         'multi_cols': {f'BBL_{window_size}_2.0': f'BBL_{window_size}_2.0', f'BBM_{window_size}_2.0': f'BBM_{window_size}_2.0', f'BBU_{window_size}_2.0': f'BBU_{window_size}_2.0'}}, # Corrected order/names based on pandas_ta output for bbands
-        {'name': 'adx', 'params': {'length': 14}, # ADX uses high, low, close internally
-         'multi_cols': {'ADX_14': 'ADX_14', 'DMP_14': 'DMP_14', 'DMN_14': 'DMN_14'}},
-        {'name': 'stoch', 'params': {'k': 14, 'd': 3, 'smooth_k': 3}, # Stochastic uses high, low, close
-         'multi_cols': {'STOCHk_14_3_3': 'STOCHk_14_3_3', 'STOCHd_14_3_3': 'STOCHd_14_3_3'}},
-        {'name': 'cci', 'params': {'length': 20, 'constant': 0.015}, 'col_name': 'CCI_20_0.015'}, # CCI uses high, low, close. Adjusted name for constant.
-        {'name': 'atr', 'params': {'length': 14}, 'col_name': 'ATR_14'}, # ATR uses high, low, close
-        {'name': 'obv', 'params': {}, 'col_name': 'OBV'}, # OBV uses close and volume
-        {'name': 'ichimoku', 'params': {'tenkan': 9, 'kijun': 26, 'senkou': 52}, # Ichimoku uses high, low, close
-         'multi_cols': { # Default pandas_ta names
-             'ITS_9': 'ITS_9', # Tenkan-sen
-             'IKS_26': 'IKS_26', # Kijun-sen
-             'ISA_9': 'ISA_9',   # Senkou Span A (Note: pandas_ta uses 'ISA_9', 'ISB_26', 'ITS_9', 'IKS_26', 'ICS_26')
-             'ISB_26': 'ISB_26', # Senkou Span B
-             'ICS_26': 'ICS_26'  # Chikou Span
-         }
-        }
-    ]
-
-    for config in indicator_configs:
-        name = config['name']
-        params_from_config = config.get('params', {})
+        if window <= 0:
+            logger.warning(f"Invalid window size {window} <= 0. Skipping.")
+            continue
+        if len(df_calc[column]) < window:
+            logger.warning(f"Data length ({len(df_calc[column])}) is less than window size ({window}). Rolling stats will be mostly NaN.")
         
-        full_params = params_from_config.copy()
-        
-        try:
-            indicator_result_dict = get_indicator(
-                df, # Pass the original df for calculation
-                indicator=name, 
-                params=full_params,
-                symbol=symbol, 
-                timeframe=timeframe,
-                use_cache=True
-            )
-            
-            if 'values' in indicator_result_dict:
-                indicator_data_dict_format = indicator_result_dict['values']
-                
-                if config.get('multi_cols'):
-                    for original_col_name, new_col_name in config['multi_cols'].items():
-                        if original_col_name in indicator_data_dict_format:
-                            # Convert dict {str_timestamp: value} to Series
-                            # The timestamps from get_indicator are ISO strings. df_out.index is DatetimeIndex.
-                            # We must ensure alignment.
-                            col_data_dict = indicator_data_dict_format[original_col_name]
-                            if isinstance(col_data_dict, dict):
-                                temp_series = pd.Series(col_data_dict)
-                                temp_series.index = pd.to_datetime(temp_series.index, utc=True)
-                                # Align with df_out's index; this handles missing dates from indicator output
-                                df_out[new_col_name] = temp_series.reindex(df_out.index) 
-                            else:
-                                logger.warning(f"Expected dict for {original_col_name} in {name}, got {type(col_data_dict)}. Skipping.")
-                                df_out[new_col_name] = np.nan # Fallback
-                        else:
-                            logger.warning(f"Column {original_col_name} not found in {name} output. Initializing {new_col_name} with NaNs.")
-                            df_out[new_col_name] = np.nan
-                elif 'col_name' in config: # Single output indicators
-                    new_col_name = config['col_name']
-                    if isinstance(indicator_data_dict_format, dict):
-                        temp_series = pd.Series(indicator_data_dict_format)
-                        temp_series.index = pd.to_datetime(temp_series.index, utc=True)
-                        df_out[new_col_name] = temp_series.reindex(df_out.index)
-                    else:
-                        logger.warning(f"Expected dict for single series {name}, got {type(indicator_data_dict_format)}. Skipping.")
-                        df_out[new_col_name] = np.nan # Fallback
-                
-        except Exception as e:
-            logger.error(f"Error calculating or adding indicator {name} for {symbol}: {e}")
-            # Initialize columns with NaNs if calculation fails for multi_cols
-            if config.get('multi_cols'):
-                for _, new_col_name in config['multi_cols'].items():
-                    df_out[new_col_name] = np.nan
-            elif 'col_name' in config:
-                 df_out[config['col_name']] = np.nan
-                 
-    # Ensure all defined indicator columns exist in df_out, even if they failed
-    # This helps prevent KeyErrors later if MarketAnalyzer expects them.
-    all_expected_cols = []
-    for cfg in indicator_configs:
-        if cfg.get('multi_cols'):
-            all_expected_cols.extend(cfg['multi_cols'].values())
-        elif 'col_name' in cfg:
-            all_expected_cols.append(cfg['col_name'])
-            
-    for col in all_expected_cols:
-        if col not in df_out.columns:
-            logger.warning(f"Indicator column {col} was expected but not created. Initializing with NaNs.")
-            df_out[col] = np.nan
-            
-    return df_out
+        df_calc[f'sma_{window}'] = df_calc[column].rolling(window=window, min_periods=1).mean() # min_periods=1 to get value even if less than window data
+        df_calc[f'std_{window}'] = df_calc[column].rolling(window=window, min_periods=1).std()
+
+    return df_calc
+
 
 # Helper functions for common analysis tasks
-def get_performance_summary(data: pd.DataFrame, price_col: str = 'close') -> Dict[str, float]:
+# (Consider moving or removing if unused by core CLI)
+# These functions might have been for yfinance data originally.
+
+def get_performance_summary(
+    data: pd.DataFrame, price_col: str = 'close'
+) -> Dict[str, Any]: # Changed return type to Any for flexibility with str dates
     """
     Calculate performance summary statistics for a stock.
-    
+
     Args:
         data: DataFrame containing price data
         price_col: Column name containing price data
-    
+
     Returns:
         Dictionary of performance metrics
     """
-    # Use percent returns for correct annualized return/volatility in percent
-    df = calculate_returns(data, price_col=price_col, return_type='pct')
+    if data is None or data.empty or price_col not in data.columns or data[price_col].isnull().all():
+        logger.warning("Performance summary cannot be calculated due to missing or all-NaN price data.")
+        return {"error": "Invalid data for performance summary"}
+
+    df_returns_calc = calculate_returns(
+        data, price_col=price_col, return_type='pct'
+    )
+
+    if 'return' not in df_returns_calc.columns or df_returns_calc['return'].isnull().all():
+        logger.warning("Returns could not be calculated or are all NaN. Performance summary will be limited.")
+        start_price_val = data[price_col].dropna().iloc[0] if not data[price_col].dropna().empty else np.nan
+        end_price_val = data[price_col].dropna().iloc[-1] if not data[price_col].dropna().empty else np.nan
+        total_return_val = ((end_price_val / start_price_val) - 1) * 100 if pd.notna(start_price_val) and pd.notna(end_price_val) and start_price_val != 0 else 0.0
+        
+        return {
+            'start_date': data.index[0].strftime('%Y-%m-%d') if not data.empty else 'N/A',
+            'end_date': data.index[-1].strftime('%Y-%m-%d') if not data.empty else 'N/A',
+            'total_return_pct': total_return_val,
+            'annual_return_pct': 0.0,
+            'annual_volatility_pct': 0.0,
+            'sharpe_ratio': 0.0,
+            'max_drawdown_pct': 0.0,
+            'status': 'Limited due to issues with return calculation'
+        }
+
+
+    start_price = df_returns_calc[price_col].iloc[0]
+    end_price = df_returns_calc[price_col].iloc[-1]
+    total_return = (end_price / start_price - 1) * 100 if start_price != 0 else 0
+
+    daily_returns = df_returns_calc['return'].dropna()
+    if daily_returns.empty:
+        logger.warning("No valid daily returns to calculate annualized metrics.")
+        annual_return = 0.0
+        annual_volatility = 0.0
+        sharpe_ratio = 0.0
+    else:
+        annual_return = daily_returns.mean() * 252 * 100
+        annual_volatility = daily_returns.std() * np.sqrt(252) * 100
+        sharpe_ratio = annual_return / annual_volatility if annual_volatility != 0 else 0
+
+    max_drawdown = 0.0 # Initialize as float
+    peak = df_returns_calc[price_col].iloc[0] if not df_returns_calc[price_col].empty else np.nan
+
+    if pd.notna(peak):
+        for price in df_returns_calc[price_col]:
+            if pd.notna(price): # Ensure price is not NaN
+                if price > peak:
+                    peak = price
+                # Ensure peak is not zero to avoid division by zero
+                if peak != 0:
+                    drawdown = (peak - price) / peak
+                    max_drawdown = max(max_drawdown, drawdown)
     
-    # Calculate performance metrics
-    start_price = df[price_col].iloc[0]
-    end_price = df[price_col].iloc[-1]
-    total_return = (end_price / start_price - 1) * 100
-    
-    daily_returns = df['return'].dropna()
-    annual_return = daily_returns.mean() * 252 * 100
-    annual_volatility = daily_returns.std() * np.sqrt(252) * 100
-    sharpe_ratio = annual_return / annual_volatility if annual_volatility != 0 else 0
-    
-    max_drawdown = 0
-    peak = df[price_col].iloc[0]
-    
-    for price in df[price_col]:
-        if price > peak:
-            peak = price
-        drawdown = (peak - price) / peak
-        max_drawdown = max(max_drawdown, drawdown)
-    
-    max_drawdown *= 100  # Convert to percentage
-    
+    max_drawdown *= 100
+
     return {
-        'start_date': df.index[0].strftime('%Y-%m-%d'),
-        'end_date': df.index[-1].strftime('%Y-%m-%d'),
-        'start_price': start_price,
-        'end_price': end_price,
+        'start_date': df_returns_calc.index[0].strftime('%Y-%m-%d') if not df_returns_calc.empty else 'N/A',
+        'end_date': df_returns_calc.index[-1].strftime('%Y-%m-%d') if not df_returns_calc.empty else 'N/A',
         'total_return_pct': total_return,
-        'annualized_return_pct': annual_return,
-        'annualized_volatility_pct': annual_volatility,
-        'volatility': annual_volatility,
+        'annual_return_pct': annual_return,
+        'annual_volatility_pct': annual_volatility,
         'sharpe_ratio': sharpe_ratio,
-        'max_drawdown_pct': max_drawdown
+        'max_drawdown_pct': max_drawdown,
     }
 
+
 def compare_stocks(
-    symbols: List[str], 
-    period: str = '1y', 
-    normalize: bool = True
-) -> Tuple[pd.DataFrame, go.Figure]:
+    stock_data_list: List[pd.DataFrame],
+    stock_names: List[str],
+    price_col: str = 'close'
+) -> pd.DataFrame:
     """
-    Compare performance of multiple stocks.
-    
+    Compare performance metrics for a list of stocks.
+
     Args:
-        symbols: List of stock ticker symbols
-        period: Time period to fetch
-        normalize: Whether to normalize prices to starting at 100
-    
+        stock_data_list: List of DataFrames, each containing price data for a stock
+        stock_names: List of names corresponding to the stocks
+        price_col: Column name containing price data
+
     Returns:
-        Tuple of (DataFrame with combined data, Plotly figure)
+        DataFrame summarizing performance metrics for all stocks
     """
-    # Get data for all symbols
-    df = get_multiple_stocks(symbols=symbols, period=period)
+    performance_summaries = []
+
+    for i, stock_data in enumerate(stock_data_list):
+        if stock_data is None or stock_data.empty:
+            logger.warning(f"Empty data for stock {stock_names[i]}, skipping comparison.")
+            continue
+        summary = get_performance_summary(stock_data, price_col=price_col)
+        if "error" not in summary:
+            summary['stock'] = stock_names[i]
+            performance_summaries.append(summary)
+        else:
+            logger.warning(f"Could not get performance summary for {stock_names[i]}: {summary.get('error')}")
+
+
+    if not performance_summaries:
+        logger.warning("No performance summaries could be generated for stock comparison.")
+        return pd.DataFrame() # Return empty DataFrame if no valid summaries
+
+    comparison_df = pd.DataFrame(performance_summaries)
+    # Reorder columns for better readability
+    if not comparison_df.empty:
+        cols_order = ['stock', 'total_return_pct', 'annual_return_pct',
+                      'annual_volatility_pct', 'sharpe_ratio', 'max_drawdown_pct',
+                      'start_date', 'end_date']
+        # Filter out any columns not present to avoid KeyError
+        final_cols = [col for col in cols_order if col in comparison_df.columns]
+        comparison_df = comparison_df[final_cols]
     
-    # Create a pivot table to make easier to compare closing prices
-    pivot_df = df.pivot_table(values='close', index=df.index, columns='symbol')
-    
-    # Normalize if requested
-    if normalize:
-        for col in pivot_df.columns:
-            pivot_df[col] = pivot_df[col] / pivot_df[col].iloc[0] * 100
-    
-    # Create plot
-    fig = px.line(
-        pivot_df, 
-        x=pivot_df.index, 
-        y=pivot_df.columns,
-        title=f'Stock Price Comparison ({period})' + (' - Normalized' if normalize else ''),
-        labels={'value': 'Price' + (' (Normalized)' if normalize else ''), 'variable': 'Symbol'}
-    )
-    
-    fig.update_layout(template='plotly_white')
-    
-    return pivot_df, fig
+    return comparison_df

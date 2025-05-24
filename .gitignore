@@ -52,7 +52,4 @@ build/
 .mypy_cache/
 .dmypy.json
 
-# Jupyter Notebook
-.ipynb_checkpoints/
-
 # Project specific files that don't need to be tracked 

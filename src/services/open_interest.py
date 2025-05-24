@@ -6,7 +6,7 @@ from binance.client import Client
 from binance.exceptions import BinanceAPIException
 import json
 import numpy as np
-from datetime import datetime
+from datetime import datetime, timezone
 import ccxt  # Add CCXT library import
 import random
 import hashlib
@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 CACHE_DIR = Path("cache")
 CACHE_DIR.mkdir(exist_ok=True)
 OPEN_INTEREST_CACHE_FILE = CACHE_DIR / "open_interest_cache.json"
+CACHE_TTL_SECONDS = 60 * 5  # Cache data for 5 minutes
 
 # Constants for analysis
 OI_VOLUME_RATIO_THRESHOLD_HIGH = 2.0  # High OI/Volume ratio
@@ -362,61 +363,51 @@ def _analyze_open_interest(data: Dict[str, Any], symbol: str) -> Dict[str, Any]:
 
 def _get_cached_data(symbol: str) -> Optional[Dict[str, Any]]:
     """
-    Get cached open interest data for a symbol if available and not expired.
-    
-    Args:
-        symbol: Trading pair symbol
-        
-    Returns:
-        Cached data or None if no valid cache exists
+    Retrieve cached data for a given symbol if not expired.
     """
-    if not OPEN_INTEREST_CACHE_FILE.exists():
-        return None
-    
     try:
-        # Load cache file
-        with open(OPEN_INTEREST_CACHE_FILE, 'r') as f:
-            cache = json.load(f)
-        
-        # Check if we have cached data for this symbol
-        if symbol in cache:
-            # Check if cache is still valid (less than 1 hour old)
-            cache_time = cache[symbol].get("cache_timestamp", 0)
-            if time.time() - cache_time < 3600:  # 1 hour cache validity
-                return cache[symbol]["data"]
-                
+        if OPEN_INTEREST_CACHE_FILE.exists():
+            with open(OPEN_INTEREST_CACHE_FILE, 'r') as f:
+                cache = json.load(f)
+            
+            if symbol in cache:
+                cached_entry = cache[symbol]
+                if time.time() - cached_entry.get('timestamp_cached', 0) < CACHE_TTL_SECONDS:
+                    logger.info(f"Using cached open interest data for {symbol}")
+                    return cached_entry['data']
+                else:
+                    logger.info(f"Cache expired for {symbol}")
+            else:
+                logger.debug(f"Symbol {symbol} not found in cache.")
+        else:
+            logger.debug(f"Cache file {OPEN_INTEREST_CACHE_FILE} does not exist.")
     except Exception as e:
-        logger.error(f"Error reading cache: {e}")
-    
+        logger.error(f"Error reading from cache: {e}", exc_info=True)
     return None
 
 def _cache_data(symbol: str, data: Dict[str, Any]) -> None:
     """
-    Cache open interest data for a symbol.
-    
-    Args:
-        symbol: Trading pair symbol
-        data: Open interest data to cache
+    Cache data for a given symbol.
     """
     try:
-        # Create or load existing cache
         cache = {}
         if OPEN_INTEREST_CACHE_FILE.exists():
             with open(OPEN_INTEREST_CACHE_FILE, 'r') as f:
-                cache = json.load(f)
+                try:
+                    cache = json.load(f)
+                except json.JSONDecodeError:
+                    logger.warning(f"Cache file {OPEN_INTEREST_CACHE_FILE} is corrupted. Creating a new one.")
         
-        # Update cache with new data
         cache[symbol] = {
-            "cache_timestamp": time.time(),
-            "data": data
+            'data': data,
+            'timestamp_cached': time.time()
         }
         
-        # Save cache
         with open(OPEN_INTEREST_CACHE_FILE, 'w') as f:
-            json.dump(cache, f, indent=2)
-            
+            json.dump(cache, f, indent=4)
+        logger.info(f"Cached open interest data for {symbol}")
     except Exception as e:
-        logger.error(f"Error writing to cache: {e}")
+        logger.error(f"Error writing to cache: {e}", exc_info=True)
 
 def analyze_open_interest(data: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """

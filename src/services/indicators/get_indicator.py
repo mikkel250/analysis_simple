@@ -21,6 +21,20 @@ from .cci import calculate_cci
 from .obv import calculate_obv
 from .ichimoku import calculate_ichimoku
 
+# Import new advanced indicators
+from .williams_r import calculate_williams_r
+from .vortex import calculate_vortex
+from .alma import calculate_alma
+from .kama import calculate_kama
+from .trix import calculate_trix
+from .ppo import calculate_ppo
+from .roc import calculate_roc
+from .aroon import calculate_aroon
+from .fisher_transform import calculate_fisher_transform
+from .awesome_oscillator import calculate_awesome_oscillator
+from .ultimate_oscillator import calculate_ultimate_oscillator
+from .cci_enhanced import calculate_cci_enhanced
+
 from ..cache_service import invalidate_cache, generate_indicator_cache_key
 
 # Configure logging
@@ -57,6 +71,7 @@ def get_indicator(
     
     # Map indicator names to their calculation functions
     indicator_map = {
+        # Basic indicators
         'sma': calculate_sma,
         'ema': calculate_ema,
         'rsi': calculate_rsi,
@@ -67,14 +82,36 @@ def get_indicator(
         'atr': calculate_atr,
         'cci': calculate_cci,
         'obv': calculate_obv,
-        'ichimoku': calculate_ichimoku
+        'ichimoku': calculate_ichimoku,
+        
+        # Advanced indicators (Batch 1)
+        'williams_r': calculate_williams_r,
+        'willr': calculate_williams_r,  # Alternative name
+        'vortex': calculate_vortex,
+        'vi': calculate_vortex,  # Alternative name
+        'alma': calculate_alma,
+        'kama': calculate_kama,
+        'trix': calculate_trix,
+        'ppo': calculate_ppo,
+        'roc': calculate_roc,
+        'aroon': calculate_aroon,
+        'fisher': calculate_fisher_transform,
+        'fisher_transform': calculate_fisher_transform,
+        'ao': calculate_awesome_oscillator,
+        'awesome': calculate_awesome_oscillator,
+        'awesome_oscillator': calculate_awesome_oscillator,
+        'uo': calculate_ultimate_oscillator,
+        'ultimate': calculate_ultimate_oscillator,
+        'ultimate_oscillator': calculate_ultimate_oscillator,
+        'cci_enhanced': calculate_cci_enhanced,
+        'cci_enh': calculate_cci_enhanced  # Alternative name
     }
     
     # Get the appropriate function based on indicator name
     indicator_func = indicator_map.get(indicator.lower())
     
     if indicator_func is None:
-        supported = ', '.join(indicator_map.keys())
+        supported = ', '.join(sorted(indicator_map.keys()))
         raise ValueError(f"Unsupported indicator: '{indicator}'. Supported indicators: {supported}")
     
     # Call the indicator function with the provided parameters

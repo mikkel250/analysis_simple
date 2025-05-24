@@ -297,6 +297,118 @@ INDICATOR_EXPLANATIONS = {
         f"Funding rates help keep perpetual contract prices in line with spot prices. "
         f"{highlight('Interpretation:')} Watch for extreme funding rates as a sign of market crowding and possible reversals."
     ),
+
+    # Advanced Technical Indicators (Batch 1)
+    "williams_r": (
+        f"{indicator_name('Williams %R')} is a momentum oscillator that measures overbought and oversold levels, ranging from 0 to -100. "
+        f"It compares the closing price to the high-low range over a specified period. "
+        f"{highlight('Interpretation:')} Values from 0 to -20 indicate overbought conditions (potential sell signal); "
+        f"values from -80 to -100 indicate oversold conditions (potential buy signal). Unlike RSI, Williams %R is "
+        f"inverted, with higher values being more bearish. In crypto markets, it's particularly useful for identifying "
+        f"short-term reversal points and momentum shifts."
+    ),
+
+    "vortex": (
+        f"{indicator_name('Vortex Indicator (VI)')} consists of two oscillators (VI+ and VI-) that capture positive "
+        f"and negative trend movement by measuring the relationship between closing prices and true range. "
+        f"{highlight('Interpretation:')} When VI+ crosses above VI-, it signals potential bullish momentum; when VI- "
+        f"crosses above VI+, it signals potential bearish momentum. Values above 1.0 indicate strong directional "
+        f"movement. In crypto markets, the Vortex Indicator helps identify trend changes and momentum shifts, "
+        f"particularly effective during trending periods."
+    ),
+
+    "alma": (
+        f"{indicator_name('Adaptive Linear Moving Average (ALMA)')} is a technical indicator that combines the "
+        f"smoothness of a moving average with the responsiveness needed to track price changes effectively. "
+        f"It uses a Gaussian filter and can be adjusted for smoothness and responsiveness. "
+        f"{highlight('Interpretation:')} Price above ALMA suggests bullish momentum; price below suggests bearish "
+        f"momentum. ALMA crossovers can signal trend changes. The indicator adapts to market conditions better "
+        f"than traditional moving averages. In volatile crypto markets, ALMA provides smoother signals while "
+        f"maintaining sensitivity to significant price movements."
+    ),
+
+    "kama": (
+        f"{indicator_name('Kaufman Adaptive Moving Average (KAMA)')} is a moving average that adjusts its "
+        f"smoothing based on market volatility and noise. It moves faster during trending periods and slower "
+        f"during sideways markets. "
+        f"{highlight('Interpretation:')} Price above KAMA indicates bullish conditions; price below indicates "
+        f"bearish conditions. KAMA crossovers signal potential trend changes. The adaptive nature makes it "
+        f"particularly valuable in crypto markets, which alternate between high volatility trending periods "
+        f"and quieter consolidation phases."
+    ),
+
+    "trix": (
+        f"{indicator_name('TRIX')} is a momentum oscillator that shows the rate of change of a triple exponentially "
+        f"smoothed moving average. It filters out price movements that are considered insignificant or noise. "
+        f"{highlight('Interpretation:')} When TRIX crosses above zero, it suggests bullish momentum; when it "
+        f"crosses below zero, it suggests bearish momentum. TRIX signal line crossovers can provide entry/exit "
+        f"signals. In crypto markets, TRIX helps filter out false signals common in volatile conditions while "
+        f"identifying genuine trend changes."
+    ),
+
+    "ppo": (
+        f"{indicator_name('Percentage Price Oscillator (PPO)')} is similar to MACD but shows the percentage "
+        f"difference between two moving averages rather than the absolute difference. This makes it easier to "
+        f"compare across different price levels. "
+        f"{highlight('Interpretation:')} PPO above zero indicates bullish momentum; below zero indicates bearish "
+        f"momentum. Signal line crossovers and histogram changes provide trading signals. In crypto markets, "
+        f"PPO is particularly useful for comparing momentum across different cryptocurrencies or timeframes."
+    ),
+
+    "roc": (
+        f"{indicator_name('Rate of Change (ROC)')} measures the percentage change in price over a specified "
+        f"number of periods. It's a pure momentum oscillator that shows the velocity of price movement. "
+        f"{highlight('Interpretation:')} Positive ROC values indicate upward momentum; negative values indicate "
+        f"downward momentum. Extreme ROC values may signal overbought/oversold conditions. Zero-line crossovers "
+        f"can signal momentum shifts. In crypto markets, ROC helps identify the strength of price movements "
+        f"and potential reversal points."
+    ),
+
+    "aroon": (
+        f"{indicator_name('Aroon Indicator')} consists of Aroon Up and Aroon Down lines that measure how long "
+        f"it has been since the highest high and lowest low within a given period. Values range from 0 to 100. "
+        f"{highlight('Interpretation:')} Aroon Up above 70 with Aroon Down below 30 suggests a strong uptrend; "
+        f"Aroon Down above 70 with Aroon Up below 30 suggests a strong downtrend. When both are between 30-70, "
+        f"the market is likely consolidating. In crypto markets, Aroon helps identify trend strength and "
+        f"potential breakouts from consolidation periods."
+    ),
+
+    "fisher_transform": (
+        f"{indicator_name('Fisher Transform')} converts price data into a Gaussian normal distribution, making "
+        f"turning points easier to identify. It emphasizes when prices have moved to an extreme. "
+        f"{highlight('Interpretation:')} Values above +1.5 suggest overbought conditions; values below -1.5 "
+        f"suggest oversold conditions. The indicator crossing above/below zero can signal trend changes. "
+        f"In crypto markets, the Fisher Transform is particularly effective at identifying reversal points "
+        f"and extreme price movements that may be unsustainable."
+    ),
+
+    "awesome_oscillator": (
+        f"{indicator_name('Awesome Oscillator (AO)')} measures market momentum by calculating the difference "
+        f"between a 5-period and 34-period simple moving average of the midpoint (high+low)/2. "
+        f"{highlight('Interpretation:')} Values above zero indicate bullish momentum; below zero indicates "
+        f"bearish momentum. Color changes (green to red or vice versa) can signal momentum shifts. Zero-line "
+        f"crossovers provide trend change signals. In crypto markets, AO helps identify momentum changes "
+        f"and potential trend reversals, particularly effective in trending markets."
+    ),
+
+    "ultimate_oscillator": (
+        f"{indicator_name('Ultimate Oscillator')} combines short, medium, and long-term price action into one "
+        f"oscillator to avoid false signals common in single-timeframe indicators. It ranges from 0 to 100. "
+        f"{highlight('Interpretation:')} Values above 70 indicate overbought conditions; values below 30 "
+        f"indicate oversold conditions. Divergences between price and the oscillator can signal potential "
+        f"reversals. In crypto markets, the Ultimate Oscillator's multi-timeframe approach helps filter "
+        f"out noise and provides more reliable overbought/oversold signals."
+    ),
+
+    "cci_enhanced": (
+        f"{indicator_name('Enhanced Commodity Channel Index (CCI)')} extends the traditional CCI with multiple "
+        f"smoothing methods, multi-timeframe analysis, and divergence detection capabilities. "
+        f"{highlight('Interpretation:')} Values above +100 indicate potential overbought conditions; values "
+        f"below -100 indicate potential oversold conditions. The enhanced version provides additional insights "
+        f"through different smoothing methods (SMA, EMA, WMA) and can analyze multiple timeframes simultaneously. "
+        f"Divergence analysis helps identify potential reversal points. In crypto markets, the enhanced CCI "
+        f"provides more comprehensive momentum analysis and better signal filtering."
+    ),
 }
 
 # Market summary explanations

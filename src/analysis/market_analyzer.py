@@ -157,6 +157,22 @@ class MarketAnalyzer:
         self.performance = market_data.get_performance_summary(self.data)
         self.analysis_results["data_with_indicators"] = self.data
         self.analysis_results["performance"] = self.performance
+        # Fetch open interest and store in analysis_results
+        try:
+            from src.services.open_interest import fetch_open_interest
+            oi_data = fetch_open_interest(self.symbol, exchange="okx")
+            value = oi_data.get("open_interest_value") or oi_data.get("value")
+            prev_value = None
+            if value is not None and "open_interest_change_24h" in oi_data:
+                change_pct = oi_data["open_interest_change_24h"]
+                try:
+                    prev_value = value / (1 + change_pct / 100) if change_pct is not None else None
+                except Exception:
+                    prev_value = None
+            self.analysis_results["open_interest"] = {"value": value, "prev_value": prev_value}
+        except Exception as e:
+            logger.warning(f"Could not fetch open interest for {self.symbol}: {e}")
+            self.analysis_results["open_interest"] = None
         # Detect candlestick patterns
         self.analysis_results["candlestick_patterns"] = self._detect_candlestick_patterns()
         logger.info(
@@ -1034,6 +1050,27 @@ class MarketAnalyzer:
         indicators_summary = self.analysis_results.get("indicators_summary", self._summarize_indicators())
         rsi_signal = indicators_summary.get("rsi", {}).get("values", {}).get("Signal", "Neutral")
         rsi_explanation = indicators_summary.get("rsi", {}).get("explanation", "")
+        # --- Open Interest Integration ---
+        open_interest = self.analysis_results.get("open_interest")
+        oi_factor = None
+        if open_interest and isinstance(open_interest, dict):
+            oi_val = open_interest.get("value")
+            oi_prev = open_interest.get("prev_value")
+            price_val = self.data["close"].iloc[-1] if "close" in self.data.columns else None
+            price_prev = self.data["close"].iloc[-2] if "close" in self.data.columns and len(self.data) > 1 else None
+            if oi_val is not None and oi_prev is not None and price_val is not None and price_prev is not None:
+                oi_delta = oi_val - oi_prev
+                price_delta = price_val - price_prev
+                if oi_delta > 0 and price_delta > 0:
+                    oi_factor = "Rising open interest with rising price confirms bullish scenario."
+                elif oi_delta < 0 and price_delta > 0:
+                    oi_factor = "Falling open interest with rising price suggests short covering, possible reversal."
+                elif oi_delta > 0 and price_delta < 0:
+                    oi_factor = "Rising open interest with falling price confirms bearish scenario."
+                elif oi_delta < 0 and price_delta < 0:
+                    oi_factor = "Falling open interest with falling price suggests long liquidation, possible bottom."
+                elif oi_delta == 0:
+                    oi_factor = "Flat open interest, conviction lacking."
         cases = {}
         if "bullish" in overall_trend:
             cases["bullish_continuation"] = {
@@ -1180,6 +1217,18 @@ class MarketAnalyzer:
                 elif direction == 'neutral' and ('neutral' in signal or 'mixed' in signal):
                     rationale = ind_data.get('explanation', 'Neutral/mixed signal from indicator.')
                     supporting_factors.append(f"{ind_key.upper()} rationale: {rationale}")
+            # --- Add open interest factor if available ---
+            if oi_factor:
+                oi_factor_lower = oi_factor.lower()
+                oi_val = open_interest.get("value") if open_interest else None
+                oi_prev = open_interest.get("prev_value") if open_interest else None
+                oi_value_str = f" (Current OI: {oi_val}, Previous OI: {oi_prev})" if oi_val is not None and oi_prev is not None else ""
+                if direction == 'bullish' and 'bullish' in oi_factor_lower:
+                    supporting_factors.append(f"Open Interest rationale: {oi_factor}{oi_value_str}")
+                elif direction == 'bearish' and 'bearish' in oi_factor_lower:
+                    supporting_factors.append(f"Open Interest rationale: {oi_factor}{oi_value_str}")
+                elif direction == 'neutral' and ('neutral' in oi_factor_lower or 'conviction lacking' in oi_factor_lower):
+                    supporting_factors.append(f"Open Interest rationale: {oi_factor}{oi_value_str}")
             # If none found, fall back to previous logic
             if not supporting_factors:
                 rationale = case.get('educational_note') or case.get('description') or 'Scenario rationale not specified.'
@@ -1187,7 +1236,7 @@ class MarketAnalyzer:
                 indicators_found = set()
                 for indicator in known_indicators:
                     for text in [case.get('educational_note', ''), case.get('description', '')]:
-                        if re.search(rf'\b{indicator}\b', text, re.IGNORECASE):
+                        if re.search(rf'\\b{indicator}\\b', text, re.IGNORECASE):
                             indicators_found.add(indicator)
                 if indicators_found:
                     supporting_factors = [f"{ind} rationale: {rationale}" for ind in sorted(indicators_found)]

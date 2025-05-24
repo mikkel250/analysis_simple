@@ -123,7 +123,7 @@ def format_text_analysis(analysis_results: dict, symbol: str, timeframe: str, ex
             import re
             parsed = []
             for factor in supporting_factors:
-                match = re.match(r"([A-Za-z0-9_]+) rationale: (.+)", factor)
+                match = re.match(r"([A-Za-z0-9_ ]+) rationale: (.+)", factor)
                 if match:
                     indicator = match.group(1).upper()
                     rationale = match.group(2)
@@ -153,9 +153,14 @@ def format_text_analysis(analysis_results: dict, symbol: str, timeframe: str, ex
                         capture_console.print("  Rationale:")
                         for indicator, rationale in parsed:
                             if explain and indicator:
-                                explanation = get_indicator_explanation(indicator.lower())
-                                if explanation:
-                                    capture_console.print(Markdown(f"> [bold]{indicator}[/bold]: {explanation}"))
+                                if indicator == "OPEN INTEREST":
+                                    explanation = get_indicator_explanation("open_interest")
+                                    if explanation:
+                                        capture_console.print(Markdown(f"> [bold]{indicator}[/bold]: {explanation}"))
+                                else:
+                                    explanation = get_indicator_explanation(indicator.lower())
+                                    if explanation:
+                                        capture_console.print(Markdown(f"> [bold]{indicator}[/bold]: {explanation}"))
                             capture_console.print(f"    - {rationale}")
                 else:
                     capture_console.print(f"  {case_data}")
@@ -186,9 +191,14 @@ def format_text_analysis(analysis_results: dict, symbol: str, timeframe: str, ex
                     capture_console.print("  Rationale:")
                     for indicator, rationale in parsed:
                         if explain and indicator:
-                            explanation = get_indicator_explanation(indicator.lower())
-                            if explanation:
-                                capture_console.print(Markdown(f"> [bold]{indicator}[/bold]: {explanation}"))
+                            if indicator == "OPEN INTEREST":
+                                explanation = get_indicator_explanation("open_interest")
+                                if explanation:
+                                    capture_console.print(Markdown(f"> [bold]{indicator}[/bold]: {explanation}"))
+                            else:
+                                explanation = get_indicator_explanation(indicator.lower())
+                                if explanation:
+                                    capture_console.print(Markdown(f"> [bold]{indicator}[/bold]: {explanation}"))
                         capture_console.print(f"    - {rationale}")
                 capture_console.print()
 

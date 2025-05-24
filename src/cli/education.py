@@ -278,6 +278,15 @@ INDICATOR_EXPLANATIONS = {
     "marubozu": (
         f"{indicator_name('Marubozu')} is a single-candle pattern with a long body and little or no shadow. {highlight('Interpretation:')} A bullish marubozu (no upper/lower shadow) signals strong buying; a bearish marubozu signals strong selling. In crypto, it can indicate conviction and momentum."
     ),
+
+    "open_interest": (
+        f"{indicator_name('Open Interest (OI)')} counts only active, open positions in derivative contracts (like futures or options) that have been executed and are currently held open.\n"
+        f"It does NOT include limit orders or any orders waiting to be filled.\n"
+        f"OI increases when a new contract is opened (e.g., a buyer and a seller enter into a new futures contract).\n"
+        f"OI decreases when a contract is closed (e.g., a position is settled, offset, or liquidated).\n"
+        f"\n"
+        f"{highlight('Interpretation:')} Rising OI with rising price is typically bullish (new money entering the market); rising OI with falling price is typically bearish (new shorts entering). Falling OI means positions are being closed, regardless of direction. OI is a measure of market participation, not direction.\n"
+    ),
 }
 
 # Market summary explanations

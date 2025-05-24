@@ -7,6 +7,8 @@ from src.atr_calculator import calculate_atr_trade_parameters
 from src.services.data_fetcher import get_historical_data
 from src.services.indicators import get_indicator
 
+logging.disable(logging.CRITICAL)
+
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format='%(levelname)s: %(message)s')
 

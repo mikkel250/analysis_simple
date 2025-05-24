@@ -1,4 +1,8 @@
 from typing import List, Dict, Optional, Any
+import ccxt
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def fetch_funding_rates(symbol: str, api: Optional[Any] = None) -> List[Dict[str, Any]]:
@@ -32,4 +36,46 @@ def analyze_funding_rates(rates: List[Dict[str, Any]]) -> Dict[str, Optional[flo
     history = [r['rate'] for r in sorted_rates]
     current = history[-1]
     average = sum(history) / len(history)
-    return {'current': current, 'average': average, 'history': history} 
+    return {'current': current, 'average': average, 'history': history}
+
+
+def fetch_okx_funding_rate(symbol: str, credentials: Optional[dict] = None) -> Dict[str, Any]:
+    """
+    Fetch the current funding rate for a given symbol from OKX using ccxt.
+    Args:
+        symbol: Trading pair symbol (e.g., 'BTC-USDT' or 'BTC/USDT')
+        credentials: Optional dict with 'apiKey' and 'secret' (not required for public endpoints)
+    Returns:
+        Dict with 'funding_rate', 'timestamp', and 'info' (raw ccxt response)
+    """
+    # Normalize symbol to CCXT format: 'BTC/USDT:USDT'
+    try:
+        if '-' in symbol:
+            base, quote = symbol.split('-')
+            ccxt_symbol = f"{base}/{quote}:USDT"
+        elif '/' in symbol:
+            base, quote = symbol.split('/')
+            ccxt_symbol = f"{base}/{quote}:USDT"
+        else:
+            # Fallback: assume BTCUSDT -> BTC/USDT:USDT
+            base, quote = symbol[:3], symbol[3:]
+            ccxt_symbol = f"{base}/{quote}:USDT"
+        # Initialize OKX exchange
+        if credentials:
+            exchange = ccxt.okx({
+                'apiKey': credentials.get('apiKey', ''),
+                'secret': credentials.get('secret', ''),
+                'enableRateLimit': True
+            })
+        else:
+            exchange = ccxt.okx({'enableRateLimit': True})
+        # Fetch funding rate
+        result = exchange.fetch_funding_rate(ccxt_symbol)
+        return {
+            'funding_rate': result.get('fundingRate'),
+            'timestamp': result.get('timestamp'),
+            'info': result
+        }
+    except Exception as e:
+        logger.error(f"Error fetching OKX funding rate for {symbol}: {e}")
+        return {'funding_rate': None, 'timestamp': None, 'info': {'error': str(e)}} 

@@ -6,6 +6,7 @@ This file now orchestrates analysis and uses modules from 'analyzer_modules' for
 """
 
 import logging
+logging.disable(logging.CRITICAL)
 import typer
 from rich.console import Console
 

@@ -127,10 +127,9 @@ def format_text_analysis(analysis_results: dict, symbol: str, timeframe: str, ex
                 if match:
                     indicator = match.group(1).upper()
                     rationale = match.group(2)
+                    parsed.append((indicator, rationale))
                 else:
-                    indicator = None
-                    rationale = factor
-                parsed.append((indicator, rationale))
+                    parsed.append(("OTHER", factor))
             return parsed
         
         if isinstance(market_cases, dict):
@@ -145,23 +144,16 @@ def format_text_analysis(analysis_results: dict, symbol: str, timeframe: str, ex
                         levels = case_data['key_levels']
                         capture_console.print(f"  Key Levels: {levels}")
                     # Show indicators and rationale
-                    parsed = extract_indicators_and_rationales(case_data.get('supporting_factors', []))
-                    indicators = [ind for ind, _ in parsed if ind]
-                    if indicators:
-                        capture_console.print(f"  Indicators: {', '.join(sorted(set(indicators)))}")
-                    if parsed:
-                        capture_console.print("  Rationale:")
-                        for indicator, rationale in parsed:
-                            if explain and indicator:
-                                if indicator == "OPEN INTEREST":
-                                    explanation = get_indicator_explanation("open_interest")
-                                    if explanation:
-                                        capture_console.print(Markdown(f"> [bold]{indicator}[/bold]: {explanation}"))
-                                else:
-                                    explanation = get_indicator_explanation(indicator.lower())
-                                    if explanation:
-                                        capture_console.print(Markdown(f"> [bold]{indicator}[/bold]: {explanation}"))
-                            capture_console.print(f"    - {rationale}")
+                    indicators_and_rationales = extract_indicators_and_rationales(case_data.get('supporting_factors', []))
+                    for indicator, rationale in indicators_and_rationales:
+                        if indicator == "FUNDING RATE":
+                            capture_console.print(f"  [Funding Rate] {rationale}")
+                            if explain:
+                                explanation = get_indicator_explanation('funding_rate')
+                                if explanation:
+                                    capture_console.print(f"    Explanation: {explanation}")
+                        else:
+                            capture_console.print(f"  {rationale}")
                 else:
                     capture_console.print(f"  {case_data}")
                 capture_console.print()
@@ -183,23 +175,16 @@ def format_text_analysis(analysis_results: dict, symbol: str, timeframe: str, ex
                 if potential_triggers:
                     capture_console.print(f"  Potential Triggers: {potential_triggers}")
                 # Show indicators and rationale
-                parsed = extract_indicators_and_rationales(supporting_factors)
-                indicators = [ind for ind, _ in parsed if ind]
-                if indicators:
-                    capture_console.print(f"  Indicators: {', '.join(sorted(set(indicators)))}")
-                if parsed:
-                    capture_console.print("  Rationale:")
-                    for indicator, rationale in parsed:
-                        if explain and indicator:
-                            if indicator == "OPEN INTEREST":
-                                explanation = get_indicator_explanation("open_interest")
-                                if explanation:
-                                    capture_console.print(Markdown(f"> [bold]{indicator}[/bold]: {explanation}"))
-                            else:
-                                explanation = get_indicator_explanation(indicator.lower())
-                                if explanation:
-                                    capture_console.print(Markdown(f"> [bold]{indicator}[/bold]: {explanation}"))
-                        capture_console.print(f"    - {rationale}")
+                indicators_and_rationales = extract_indicators_and_rationales(supporting_factors)
+                for indicator, rationale in indicators_and_rationales:
+                    if indicator == "FUNDING RATE":
+                        capture_console.print(f"  [Funding Rate] {rationale}")
+                        if explain:
+                            explanation = get_indicator_explanation('funding_rate')
+                            if explanation:
+                                capture_console.print(f"    Explanation: {explanation}")
+                    else:
+                        capture_console.print(f"  {rationale}")
                 capture_console.print()
 
     disclaimer_text = (

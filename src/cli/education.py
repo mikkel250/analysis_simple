@@ -287,6 +287,16 @@ INDICATOR_EXPLANATIONS = {
         f"\n"
         f"{highlight('Interpretation:')} Rising OI with rising price is typically bullish (new money entering the market); rising OI with falling price is typically bearish (new shorts entering). Falling OI means positions are being closed, regardless of direction. OI is a measure of market participation, not direction.\n"
     ),
+
+    "funding_rate": (
+        f"{indicator_name('Funding Rate')} is a periodic payment exchanged between long and short positions in perpetual futures contracts. "
+        f"A positive funding rate means longs pay shorts, indicating bullish sentiment or crowded long positions. "
+        f"A negative funding rate means shorts pay longs, indicating bearish sentiment or crowded short positions. "
+        f"Funding rates are typically small (e.g., 0.01% to 0.05% per 8 hours), but extreme values can signal market imbalance and potential for mean reversion or squeezes. "
+        f"High positive rates may precede corrections as long positions become expensive to hold. High negative rates may precede short squeezes. "
+        f"Funding rates help keep perpetual contract prices in line with spot prices. "
+        f"{highlight('Interpretation:')} Watch for extreme funding rates as a sign of market crowding and possible reversals."
+    ),
 }
 
 # Market summary explanations

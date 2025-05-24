@@ -165,14 +165,22 @@ class MarketAnalyzer:
             prev_value = None
             if value is not None and "open_interest_change_24h" in oi_data:
                 change_pct = oi_data["open_interest_change_24h"]
-                try:
-                    prev_value = value / (1 + change_pct / 100) if change_pct is not None else None
-                except Exception:
-                    prev_value = None
-            self.analysis_results["open_interest"] = {"value": value, "prev_value": prev_value}
+                prev_value = value / (1 + change_pct / 100) if change_pct is not None else None
+            self.analysis_results["open_interest"] = {
+                "value": value,
+                "prev_value": prev_value,
+                "raw": oi_data,
+            }
         except Exception as e:
-            logger.warning(f"Could not fetch open interest for {self.symbol}: {e}")
-            self.analysis_results["open_interest"] = None
+            self.analysis_results["open_interest"] = {"error": str(e)}
+
+        # Fetch funding rate and store in analysis_results
+        try:
+            from src.services.funding_rates import fetch_okx_funding_rate
+            fr_data = fetch_okx_funding_rate(self.symbol)
+            self.analysis_results["funding_rate"] = fr_data
+        except Exception as e:
+            self.analysis_results["funding_rate"] = {"error": str(e)}
         # Detect candlestick patterns
         self.analysis_results["candlestick_patterns"] = self._detect_candlestick_patterns()
         logger.info(
@@ -1071,6 +1079,25 @@ class MarketAnalyzer:
                     oi_factor = "Falling open interest with falling price suggests long liquidation, possible bottom."
                 elif oi_delta == 0:
                     oi_factor = "Flat open interest, conviction lacking."
+        # --- Funding Rate Integration ---
+        funding_rate = self.analysis_results.get("funding_rate")
+        fr_factor = None
+        fr_val = None
+        if funding_rate is None or (isinstance(funding_rate, dict) and (funding_rate.get("funding_rate") is None or "error" in funding_rate)):
+            error_msg = funding_rate.get("error") if isinstance(funding_rate, dict) and "error" in funding_rate else None
+            fr_factor = f"Funding rate data unavailable or fetch failed.{' Error: ' + error_msg if error_msg else ''}"
+        elif isinstance(funding_rate, dict):
+            fr_val = funding_rate.get("funding_rate")
+            if fr_val is not None:
+                try:
+                    fr_val_float = float(fr_val)
+                except Exception:
+                    fr_val_float = None
+                if fr_val_float is not None and abs(fr_val_float) > 0.0005:
+                    if fr_val_float > 0:
+                        fr_factor = f"High positive funding rate ({fr_val_float:.4%}) may indicate crowded longs and risk of mean reversion."
+                    else:
+                        fr_factor = f"High negative funding rate ({fr_val_float:.4%}) may indicate crowded shorts and risk of short squeeze."
         cases = {}
         if "bullish" in overall_trend:
             cases["bullish_continuation"] = {
@@ -1229,6 +1256,9 @@ class MarketAnalyzer:
                     supporting_factors.append(f"Open Interest rationale: {oi_factor}{oi_value_str}")
                 elif direction == 'neutral' and ('neutral' in oi_factor_lower or 'conviction lacking' in oi_factor_lower):
                     supporting_factors.append(f"Open Interest rationale: {oi_factor}{oi_value_str}")
+            # --- Add funding rate factor if available ---
+            if fr_factor:
+                supporting_factors.append(f"Funding Rate rationale: {fr_factor}")
             # If none found, fall back to previous logic
             if not supporting_factors:
                 rationale = case.get('educational_note') or case.get('description') or 'Scenario rationale not specified.'

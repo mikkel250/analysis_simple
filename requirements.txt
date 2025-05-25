@@ -32,3 +32,13 @@ python-dotenv==1.0.0
 
 # Added ta-lib
 ta-lib
+
+# Added scikit-learn and hmmlearn
+scikit-learn
+hmmlearn
+joblib
+
+# Added tweepy and textblob
+tweepy
+textblob
+praw

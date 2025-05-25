@@ -10,11 +10,15 @@ from .status import status_app
 from .clean import clean_app
 # from .analyzer import analyzer_app  # Removed to prevent runpy RuntimeWarning
 from .config import config_app
+from .multi_timeframe import mta_app
+from .adaptive import adaptive_app
 
 __all__ = [
     "indicator_app",
     "price_app",
     "status_app",
     "clean_app",
-    "config_app"
+    "config_app",
+    "mta_app",
+    "adaptive_app"
 ] 

@@ -53,3 +53,4 @@ build/
 .dmypy.json
 
 # Project specific files that don't need to be tracked 
+docs/savedChats/

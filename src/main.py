@@ -23,7 +23,9 @@ from src.cli.commands import (
     config_app,
     indicator_app,
     price_app,
-    status_app
+    status_app,
+    mta_app,
+    adaptive_app
 )
 
 # Create the main app instance
@@ -36,6 +38,8 @@ app.add_typer(status_app, name="status")
 app.add_typer(clean_app, name="clean")
 app.add_typer(analyzer_app, name="analyzer")
 app.add_typer(config_app, name="config")
+app.add_typer(mta_app, name="mta")
+app.add_typer(adaptive_app, name="adaptive")
 
 # Display information about the local calculation feature
 @app.callback()

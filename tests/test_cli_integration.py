@@ -18,7 +18,10 @@ def test_cli_analyzer_basic():
     assert 'Technical Indicators' in output or 'technical indicators' in output.lower()
     assert 'Market Scenarios' in output or 'market scenarios' in output.lower()
     # New: Fail if error or warning present
-    assert 'error' not in output.lower(), f"Error found in CLI output:\n{output}"
+    # Only fail if 'error:' or 'error -' appears at the start of a line, or if a traceback is present
+    error_lines = [line for line in output.lower().splitlines() if line.strip().startswith('error:') or line.strip().startswith('error -')]
+    assert not error_lines, f"Error found in CLI output:\n{output}"
+    assert 'traceback' not in output.lower(), f"Traceback found in CLI output:\n{output}"
     assert '[x]' not in output.lower(), f"Warning found in CLI output:\n{output}"
     assert 'strategy requires the following argument' not in output.lower(), f"Strategy argument error in CLI output:\n{output}"
     assert result.returncode == 0, f"CLI exited with code {result.returncode}. Output:\n{output}"

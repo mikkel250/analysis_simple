@@ -11,6 +11,7 @@ from rich.table import Table
 from rich.json import JSON
 import logging
 import json # For direct JSON output if chosen
+from typing import Optional, List, Dict, Any
 
 from src.services.multi_timeframe_service import TimeframeAnalyzer, DEFAULT_TIMEFRAMES
 from src.services.data_fetcher import CCXT_TIMEFRAMES
@@ -274,6 +275,8 @@ def _display_text_report(report: Dict[str, Any], console: Console):
             else:
                 console.print(f"  [bold magenta]{key.replace('_', ' ').title()}:[/bold magenta] {text_or_dict}")
     console.rule("[bold green]End of MTA Report[/bold green]")
+
+mtf_app = mta_app
 
 if __name__ == "__main__":
     # For direct testing of this CLI module

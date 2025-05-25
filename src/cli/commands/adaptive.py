@@ -10,6 +10,7 @@ from rich.table import Table
 import pandas as pd
 import logging
 import json
+from typing import Optional, List, Dict, Any
 
 from src.services.adaptive_indicators import AdaptiveIndicatorService
 from src.services.data_fetcher import DataFetcher # For fetching data

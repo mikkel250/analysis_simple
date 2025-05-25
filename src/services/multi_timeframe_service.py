@@ -362,30 +362,22 @@ class TimeframeAnalyzer:
                 "Shorter timeframes (e.g., 1h, 4h) show detailed price action and are useful for entry/exit timing. "
                 "Longer timeframes (e.g., 1d, 1w) establish the dominant trend and key support/resistance levels.",
             "why_mta":
-                "Using MTA helps traders: 
-"
-                "1. Identify the primary trend on higher timeframes.
-"
-                "2. Find lower-risk entries in the direction of that trend on shorter timeframes.
-"
-                "3. Avoid 'noise' and false signals common on very short timeframes.
-"
-                "4. Gain a broader market perspective.",
+                """Using MTA helps traders:
+1. Identify the primary trend on higher timeframes.
+2. Find lower-risk entries in the direction of that trend on shorter timeframes.
+3. Avoid 'noise' and false signals common on very short timeframes.
+4. Gain a broader market perspective.""",
             "confluence":
                 "Confluence occurs when multiple technical indicators or signals align across different timeframes, "
                 "pointing to the same market direction. Strong confluence can increase the probability of a successful trade. "
                 "For example, if the 1-day chart shows an uptrend and a buy signal, and the 4-hour chart also confirms with a buy signal, "
                 "this is a point of bullish confluence.",
             "common_approach":
-                "A common approach is the 'Top-Down Analysis':
-"
-                "1. Weekly Chart (Primary Trend): Determine the overall market direction and major levels.
-"
-                "2. Daily Chart (Intermediate Trend): Refine the trend, identify chart patterns and secondary levels.
-"
-                "3. 4-Hour Chart (Short-Term Trend/Setup): Look for specific trade setups in line with higher timeframe trends.
-"
-                "4. 1-Hour Chart (Entry/Exit): Fine-tune entry and exit points, manage risk.",
+                """A common approach is the 'Top-Down Analysis':
+1. Weekly Chart (Primary Trend): Determine the overall market direction and major levels.
+2. Daily Chart (Intermediate Trend): Refine the trend, identify chart patterns and secondary levels.
+3. 4-Hour Chart (Short-Term Trend/Setup): Look for specific trade setups in line with higher timeframe trends.
+4. 1-Hour Chart (Entry/Exit): Fine-tune entry and exit points, manage risk.""",
             "disclaimer":
                 "Multi-timeframe analysis, like all trading strategies, is not foolproof. "
                 "Always use risk management and consider other factors like market news and volume."

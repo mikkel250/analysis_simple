@@ -1,0 +1,205 @@
+INFO: Market analysis for BTC-USDT (1h) started.
+INFO:src.analysis.market_analyzer:Initialized MarketAnalyzer for BTC-USDT with 1h timeframe
+INFO:src.analysis.market_analyzer:Starting full analysis pipeline for BTC-USDT (Advanced: False)...
+INFO:src.analysis.data_fetching:Fetching data for BTC-USDT with timeframe=1h, limit=200
+INFO:src.config.api_config:Found OKX API credentials (OKX_API_KEY, OKX_SECRET_KEY) in environment variables.
+INFO:src.config.api_config:Using okx API credentials from environment variables.
+INFO:src.services.data_fetcher:Initializing okx with API credentials.
+INFO:src.services.data_fetcher:Fetching historical OHLCV for BTC/USDT, timeframe: 1h, limit: 200, since: None, use_cache: True
+INFO:src.services.data_fetcher:Cache hit for ohlcv_okx_BTC_USDT_1h_200. Returning cached data.
+INFO:src.analysis.market_analyzer:Running core analysis for BTC-USDT
+INFO:src.analysis.market_data:MarketData initialized for BTC-USDT (1h) with 200 rows.
+INFO:src.analysis.market_data:Adding technical indicators to BTC-USDT (1h) with config: {'sma': {'lengths': [20, 50, 100, 200]}, 'ema': {'lengths': [12, 26, 50]}, 'rsi': {'length': 14}, 'macd': {'fast': 12, 'slow': 26, 'signal': 9}, 'bbands': {'length': 20, 'std': 2}, 'atr': {'length': 14}, 'obv': {}, 'vwap': {}, 'ichimoku': {'tenkan': 9, 'kijun': 26, 'senkou': 52, 'include_chikou': True}, 'psar': {}, 'willr': {'length': 14}, 'cmf': {'length': 20}, 'stoch': {'k': 14, 'd': 3}, 'kc': {'length': 20, 'scalar': 2, 'mamode': 'ema'}, 'cci': {'length': 20}, 'adx': {'length': 14}}
+INFO:src.analysis.market_data:Columns after indicator calculation: ['open', 'high', 'low', 'close', 'volume', 'SMA_20', 'SMA_50', 'SMA_100', 'SMA_200', 'EMA_12', 'EMA_26', 'EMA_50', 'RSI_14', 'MACD_12_26_9', 'MACDh_12_26_9', 'MACDs_12_26_9', 'BBL_20_2.0', 'BBM_20_2.0', 'BBU_20_2.0', 'BBB_20_2.0', 'BBP_20_2.0', 'ATRr_14', 'OBV', 'VWAP_D', 'ISA_9', 'ISB_26', 'ITS_9', 'IKS_26', 'ICS_26', 'PSARl_0.02_0.2', 'PSARs_0.02_0.2', 'PSARaf_0.02_0.2', 'PSARr_0.02_0.2', 'WILLR_14', 'CMF_20', 'STOCHk_14_3_3', 'STOCHd_14_3_3', 'KCLe_20_2.0', 'KCBe_20_2.0', 'KCUe_20_2.0', 'CCI_20_0.015', 'ADX_14', 'DMP_14', 'DMN_14']
+INFO:src.analysis.market_data:DataFrame for BTC-USDT (1h) with indicators. Columns: ['open', 'high', 'low', 'close', 'volume', 'SMA_20', 'SMA_50', 'SMA_100', 'SMA_200', 'EMA_12', 'EMA_26', 'EMA_50', 'RSI_14', 'MACD_12_26_9', 'MACDh_12_26_9', 'MACDs_12_26_9', 'BBL_20_2.0', 'BBM_20_2.0', 'BBU_20_2.0', 'BBB_20_2.0', 'BBP_20_2.0', 'ATRr_14', 'OBV', 'VWAP_D', 'ISA_9', 'ISB_26', 'ITS_9', 'IKS_26', 'ICS_26', 'PSARl_0.02_0.2', 'PSARs_0.02_0.2', 'PSARaf_0.02_0.2', 'PSARr_0.02_0.2', 'WILLR_14', 'CMF_20', 'STOCHk_14_3_3', 'STOCHd_14_3_3', 'KCLe_20_2.0', 'KCBe_20_2.0', 'KCUe_20_2.0', 'CCI_20_0.015', 'ADX_14', 'DMP_14', 'DMN_14']
+INFO:src.services.open_interest:Cache expired for BTCUSDT
+INFO:src.config.api_config:Found OKX API credentials (OKX_API_KEY, OKX_SECRET_KEY) in environment variables.
+INFO:src.config.api_config:Using okx API credentials from environment variables.
+WARNING:src.services.open_interest:No valid API credentials found for okx, using mock data
+INFO:src.services.open_interest:Generating mock open interest data for BTC-USDT
+INFO:src.services.open_interest:Generated mock open interest data for BTC-USDT: {"open_interest_value": 4831652428.06986, "open_interest_change_24h": 16.866694594072655, "trend": "bullish", "regime": "bullish_trend", "confidence": "high", "summary": "Open interest has increased by 16.87% in the last 24 hours, indicating strong bullish momentum with new money entering the market.", "value": 4831652428.06986, "change_24h": 16.866694594072655, "trading_signals": {"signal": "bullish", "action": "buy", "entry": 54322.00604189456, "stop_loss": 48301.52507233698, "take_profit": 57...
+INFO:src.analysis.market_analyzer:Core analysis complete for BTC-USDT. Data shape with indicators: (200, 44)
+INFO:src.analysis.market_analyzer:Generating summary for BTC-USDT
+INFO:src.analysis.visualization:Generating visualizations for BTC-USDT
+INFO:src.analysis.visualization:Visualizations generated for BTC-USDT.
+INFO:src.analysis.market_analyzer:Full analysis pipeline completed for BTC-USDT.
+INFO:src.config.api_config:Found OKX API credentials (OKX_API_KEY, OKX_SECRET_KEY) in environment variables.
+INFO:src.config.api_config:Using okx API credentials from environment variables.
+INFO:src.services.data_fetcher:Initializing okx with API credentials.
+INFO:src.services.multi_timeframe_service:TimeframeAnalyzer initialized for BTC-USDT with timeframes: ['1h', '4h', '1d', '1w']
+INFO:src.services.multi_timeframe_service:Starting full multi-timeframe analysis for BTC-USDT...
+INFO:src.services.multi_timeframe_service:Fetching multi-timeframe data for BTC-USDT, timeframes: ['1h', '4h', '1d', '1w'], limit: 100
+INFO:src.services.multi_timeframe_service:Calculating indicators for BTC-USDT on timeframe 1h...
+INFO:src.services.multi_timeframe_service:Finished calculating indicators for BTC-USDT on timeframe 1h.
+INFO:src.services.multi_timeframe_service:Calculating indicators for BTC-USDT on timeframe 4h...
+INFO:src.services.multi_timeframe_service:Finished calculating indicators for BTC-USDT on timeframe 4h.
+INFO:src.services.multi_timeframe_service:Calculating indicators for BTC-USDT on timeframe 1d...
+INFO:src.services.multi_timeframe_service:Finished calculating indicators for BTC-USDT on timeframe 1d.
+INFO:src.services.multi_timeframe_service:Calculating indicators for BTC-USDT on timeframe 1w...
+INFO:src.services.multi_timeframe_service:Finished calculating indicators for BTC-USDT on timeframe 1w.
+INFO:src.services.multi_timeframe_service:Analyzing signal confluence for BTC-USDT...
+INFO:src.services.multi_timeframe_service:Confluence analysis for BTC-USDT complete. Overall score: 0.00
+INFO:src.services.multi_timeframe_service:Generating multi-timeframe summary for BTC-USDT...
+INFO:src.services.multi_timeframe_service:Multi-timeframe summary for BTC-USDT generated successfully.
+INFO:src.services.multi_timeframe_service:Full multi-timeframe analysis for BTC-USDT completed.
+╭───────── Analysis Report ─────────╮
+│ Market Analysis for BTC-USDT (1H) │
+╰───────────────────────────────────╯
+General Overview
+╭─────────────────────────────────────────── General Overview ────────────────────────────────────────────╮
+│ Analysis for BTC-USDT (1h): Current price is 106945.60. The overall trend is considered 'bearish        │
+│ (strong strength)'. Volatility is Low (7.94%). Indicator confluence: Multiple indicators align          │
+│ bearishly (confluence).                                                                                 │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+         Price Snapshot          
+┏━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━┓
+┃ Metric            ┃ Value     ┃
+┡━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━┩
+│ Current Price     │ 106945.60 │
+│ Last High         │ 107278.10 │
+│ Last Low          │ 106703.20 │
+│ Period Return Pct │ 3.55%     │
+│ Start Price       │ 103276.00 │
+│ End Price         │ 106945.60 │
+└───────────────────┴───────────┘
+╭──────────────────────╮
+│ Technical Indicators │
+╰──────────────────────╯
+SMA: Price above a moving average is generally bullish, below is bearish. Multiple MAs in agreement 
+strengthen the signal.
+  └─ Sma 20: 108212.79, Signal 20: Price below MA (bearish), Sma 50: 108528.22, Signal 50: Price below MA 
+(bearish), Sma 100: 109167.05, Signal 100: Price below MA (bearish)
+
+EMA: Price above an EMA is generally bullish, below is bearish. Multiple EMAs in agreement strengthen the 
+signal.
+  └─ Ema 12: 107777.71, Signal 12: Price below EMA (bearish), Ema 26: 108135.37, Signal 26: Price below EMA
+(bearish)
+
+RSI: 
+  └─ Rsi (14): 32.48, Signal: Neutral
+
+MACD: MACD line below the signal line with a negative histogram is bearish.
+  └─ Macd Line: -357.66, Signal Line: -256.07, Histogram: -101.59, Signal: Bearish Crossover
+
+BBANDS: 
+  └─ Lower Band: 106927.72, Upper Band: 109497.86, Signal: Within Bands
+
+ATR: ATR measures average volatility. Higher ATR means more price movement. (Column: ATRr_14)
+  └─ Atr (Value): 558.42
+
+OBV: On-Balance Volume (OBV) adds volume on up days and subtracts on down days. Rising OBV suggests 
+positive volume pressure (buying); falling OBV suggests negative volume pressure (selling). Divergences 
+between OBV and price may signal potential reversals.
+  └─ Obv: 3477.20
+
+VWAP: Price below VWAP suggests bearish sentiment and potential distribution.
+  └─ Vwap: 107469.29, Signal: Bearish (price below VWAP)
+
+ICHIMOKU: N/A
+
+PSAR: Price below the Parabolic SAR suggests a bearish trend.
+  └─ Psar: nan, Signal: Bearish (price below PSAR)
+
+WILLR: Williams %R below -80 is considered oversold, which can signal a potential upward reversal.
+  └─ Williams %R (14): -89.97, Signal: Oversold
+
+CMF: CMF below -0.1 indicates strong selling pressure and distribution.
+  └─ Cmf (20): -0.170, Signal: Bearish (strong selling pressure)
+
+HEIKINASHI: N/A
+
+ADX: N/A
+
+KC: Keltner Channel columns were not found in the data. This may be due to missing OHLC data, insufficient 
+data length, or a calculation issue with pandas_ta. Ensure your data includes open, high, low, and close 
+columns and is of sufficient length.
+  └─ Kc Lower: N/A, Kc Middle: N/A, Kc Upper: N/A, Signal: Keltner Channel data not available. This may be 
+due to missing data or a calculation error.
+
+STOCH: Stochastic %K below 20 is considered oversold, which can signal a potential upward reversal.
+  └─ %K (14): 15.11, %D (3): 24.97, Signal: Oversold
+
+CCI: CCI below -100 is considered oversold, which can signal a potential upward reversal.
+  └─ Cci (20): -153.57, Signal: Oversold
+
+Confluence: Multiple indicators align bearishly (confluence).
+╭─────────────────╮
+│ Risk Assessment │
+╰─────────────────╯
+Annualized Volatility Pct: 7.94%
+Volatility Level: Low
+Max Drawdown Pct: 4.32%
+Type: Returns-Based Volatility
+
+Support/Resistance:
+Support: ['106900.00', '106880.00']
+Resistance: ['107140.10']
+Note: Basic S/R based on recent rolling min/max.
+
+╭────────────────────╮
+│ Sentiment Analysis │
+╰────────────────────╯
+Twitter: {'symbol': 'BTC-USDT', 'timeframe': '1h', 'source': 'twitter'}
+Reddit: {'symbol': 'BTC-USDT', 'timeframe': '1h', 'source': 'reddit'}
+News: {'symbol': 'BTC-USDT', 'timeframe': '1h', 'source': 'news', 'sentiment_score': 0, 'avg_polarity': 0, 
+'avg_subjectivity': 0, 'content_items_analyzed_count': 0, 'analyzed_item_details': [], 'status': 
+'eodhd_api_token_not_found'}
+Education: {'title': 'Understanding Sentiment Analysis in Trading', 'introduction': 'Sentiment analysis 
+gauges the overall emotional tone or attitude of market participants towards a specific asset or the market
+as a whole.', 'key_concepts': ['Definition: Measuring collective mood (bullish, bearish, neutral).', 'Data 
+Sources: Social media (Twitter, Reddit), news articles, financial blogs.', 'Sentiment Indicators: Bull/Bear
+Ratio, Fear & Greed Index, social media sentiment scores.', 'Application: Contrarian indicator (extreme 
+sentiment often precedes reversals) or confirmation tool.', 'Limitations: Can be noisy, susceptible to 
+manipulation, requires careful interpretation.'], 'market_psychology_link': 'Sentiment analysis is deeply 
+rooted in market psychology, reflecting crowd behavior, biases (like herding), and emotional 
+decision-making.', 'integration_with_ta': 'Sentiment can confirm or contradict technical signals. For 
+example, strong bullish sentiment during an overbought condition (identified by TA) might signal an 
+impending pullback.'}
+
+╭─ Pattern Recognition ─╮
+│ Pattern Recognition   │
+╰───────────────────────╯
+No harmonic patterns detected.
+Elliott Wave Analysis:
+  Impulse Waves Found: 0
+  Corrective Waves Found: 3
+  Educational Content:
+    General: Fibonacci ratios are crucial in EW for projecting wave targets...
+    Impulse: An impulse wave is composed of five sub-waves...
+    Corrective: A corrective wave is typically composed of three sub-waves...
+╭──────────────────────────╮
+│ Market Scenarios & Cases │
+╰──────────────────────────╯
+Bearish Trend Continuation:
+  The current bearish (strong strength) trend may persist. RSI status: Neutral.  Consider shorting 
+opportunities on rallies or breakdowns below near-term support.
+  Confidence: high
+  Key Levels: {'support_targets': ['106900.00', '106880.00'], 'resistance_stops': ['107140.10']}
+  Potential Triggers: ['Break below nearest support', 'Negative volume confirmation']
+  SMA: Price above a moving average is generally bullish, below is bearish. Multiple MAs in agreement 
+strengthen the signal.
+  EMA: Price above an EMA is generally bullish, below is bearish. Multiple EMAs in agreement strengthen the
+signal.
+  VWAP: Price below VWAP suggests bearish sentiment and potential distribution.
+  PSAR: Price below the Parabolic SAR suggests a bearish trend.
+  CMF: CMF below -0.1 indicates strong selling pressure and distribution.
+  OPEN INTEREST: Rising open interest with falling price confirms bearish scenario. (Current OI: 
+4831652428.06986, Previous OI: 4134327957.8944435)
+
+╭────────────────────────────────────╮
+│ How the Puzzle Pieces Fit Together │
+╰────────────────────────────────────╯
+This report brings together multiple perspectives: trend, momentum, volatility, sentiment, and pattern 
+recognition. When several pieces point in the same direction, confidence in the analysis increases. Always 
+consider the full picture before making trading decisions.
+╭────────────────────────────────────────────── Disclaimer ───────────────────────────────────────────────╮
+│ This analysis is for informational purposes only and does not constitute financial advice. Market       │
+│ conditions can change rapidly. Always do your own research (DYOR) before making any trading decisions.  │
+╰─────────────────────────────────────────────────────────────────────────────────────────────────────────╯
+
+General Overview
+Analysis for BTC-USDT (1h): Current price is 106945.60. The overall trend is considered 'bearish (strong 
+strength)'. Volatility is Low (7.94%). Indicator confluence: Multiple indicators align bearishly 
+(confluence).
+Market Scenarios
+No scenarios available: no data.

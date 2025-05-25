@@ -86,9 +86,11 @@ class MarketData:
             'psar': {},
             'willr': {'length': 14},
             'cmf': {'length': 20},
+            'heikinashi': {},
             'stoch': {'k': 14, 'd': 3},
             'kc': {'length': 20, 'scalar': 2, 'mamode': 'ema'},
             'cci': {'length': 20},
+            'adx': {'length': 14},
         }
 
         config = indicators_config if indicators_config is not None else default_indicators
@@ -112,6 +114,16 @@ class MarketData:
                         "senkou": params.get('senkou', 52),
                         "include_chikou": params.get('include_chikou', True) # Ensure chikou can be configured
                     })
+                elif indicator_key == 'heikinashi':
+                    # Calculate Heikin Ashi candles using pandas_ta.ha()
+                    ha_df = ta.ha(self.data['open'], self.data['high'], self.data['low'], self.data['close'])
+                    ha_df.rename(columns={
+                        'HA_open': 'heikinashi_open',
+                        'HA_high': 'heikinashi_high',
+                        'HA_low': 'heikinashi_low',
+                        'HA_close': 'heikinashi_close',
+                    }, inplace=True)
+                    self.data = pd.concat([self.data, ha_df], axis=1)
                 elif indicator_key == 'vwap':
                     if 'volume' in self.data.columns:
                         strategy_ta_list.append(study)
@@ -148,6 +160,9 @@ class MarketData:
             logger.warning(f"No valid TA studies configured for {self.symbol} ({self.timeframe}). Skipping indicator calculation.")
             return
 
+        # Ensure all column names are lowercase for pandas_ta compatibility
+        self.data.columns = [c.lower() if isinstance(c, str) else c for c in self.data.columns]
+
         try:
             strategy = ta.Strategy(
                 name="MarketAnalysisStrategy",
@@ -156,6 +171,7 @@ class MarketData:
             )
             logger.debug(f"Applying pandas-ta strategy to {self.symbol} ({self.timeframe}): {strategy_ta_list}")
             self.data.ta.strategy(strategy)
+            logger.info(f"Columns after indicator calculation: {self.data.columns.tolist()}")
         except Exception as e:
             logger.error(f"Error applying pandas-ta strategy to {self.symbol} ({self.timeframe}): {e}", exc_info=True)
 
@@ -279,6 +295,8 @@ def get_performance_summary(
             'annual_volatility_pct': 0.0,
             'sharpe_ratio': 0.0,
             'max_drawdown_pct': 0.0,
+            'start_price': float(start_price_val) if pd.notna(start_price_val) else 0.0,
+            'end_price': float(end_price_val) if pd.notna(end_price_val) else 0.0,
             'status': 'Limited due to issues with return calculation'
         }
 
@@ -321,6 +339,8 @@ def get_performance_summary(
         'annual_volatility_pct': annual_volatility,
         'sharpe_ratio': sharpe_ratio,
         'max_drawdown_pct': max_drawdown,
+        'start_price': float(start_price) if pd.notna(start_price) else 0.0,
+        'end_price': float(end_price) if pd.notna(end_price) else 0.0,
     }
 
 
